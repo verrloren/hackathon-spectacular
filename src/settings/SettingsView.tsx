@@ -8,7 +8,6 @@ import SliderSettingsItem from "./components/SliderSettingsItem";
 import TriggerSettings from "./components/TriggerSettings";
 import SettingsItem from "./components/SettingsItem";
 import CheckBoxSettingItem from "./components/CheckBoxSettingItem";
-import FewShotExampleSettings from "./components/FewShotExampleSettings";
 import {Notice} from "obsidian";
 import {
     DEFAULT_SETTINGS,
@@ -128,7 +127,7 @@ export default function SettingsView(props: IProps): React.JSX.Element {
                 max={MAX_TOP_P}
                 step={0.05}
             />
-            {settings.apiProvider && (<>
+            {settings.AIApiSettings && (<>
                 <SliderSettingsItem
                     name={"Frequency Penalty"}
                     description={
@@ -383,26 +382,6 @@ export default function SettingsView(props: IProps): React.JSX.Element {
                         }
                     />
 
-                    <SettingsItem
-                        name={"System Message"}
-                        description={
-                            "This system message gives the models all the context and instructions they need to complete the answer generation tasks. You can edit this message to your liking. If you edit the chain of thought formatting, make sure to update the extract regex and examples accordingly."
-                        }
-                        display={"block"}
-                        errorMessage={errors.get("systemMessage")}
-                    >
-                        <textarea
-                            className="setting-item-text-area-spectacular-auto-completion"
-                            rows={10}
-                            placeholder="Your system message..."
-                            value={settings.systemMessage}
-                            onChange={(e) =>
-                                updateSettings({
-                                    systemMessage: e.target.value,
-                                })
-                            }
-                        />
-                    </SettingsItem>
 
                     <SettingsItem
                         name={"User Message template"}
@@ -424,18 +403,6 @@ export default function SettingsView(props: IProps): React.JSX.Element {
                             }
                         />
                     </SettingsItem>
-                    <FewShotExampleSettings
-                        fewShotExamples={settings.fewShotExamples}
-                        name={"Few Shot Examples"}
-                        description={
-                            "The model uses these examples to learn the expected answer format. Not all examples are sent at the same time. We only send the relevant examples, given the current cursor location. For example, the CodeBlock examples are only sent if the cursor is in a code block. If no special context is detected, we send the Text examples. Each context has a default of 2 examples, but you can add or remove examples if there is at least one per context. You can add more examples, but this will increase the inference costs."
-                        }
-                        setFewShotExamples={(value) =>
-                            updateSettings({fewShotExamples: value})
-                        }
-                        errorMessages={errors}
-
-                    />
                 </>
             )}
         </div>

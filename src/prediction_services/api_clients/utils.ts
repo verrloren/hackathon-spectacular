@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {requestUrl} from "obsidian";
 import {err, ok, Result} from "neverthrow";
 
