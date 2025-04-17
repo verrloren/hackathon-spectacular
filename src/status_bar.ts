@@ -19,6 +19,7 @@ class StatusBar {
         }
         this.statusBarItem.empty();
         this.statusBarItem.setText(this.text);
+				this.statusBarItem.setText("Voice")
     }
 
     public updateText(text: string): void {

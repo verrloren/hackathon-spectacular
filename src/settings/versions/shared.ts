@@ -16,21 +16,12 @@ export const MIN_PRESENCE_PENALTY = 0;
 export const MAX_PRESENCE_PENALTY = 2;
 
 
-export const azureOAIApiSettingsSchema = z.object({
-    key: z.string(),
-    url: z.string().url().or(z.string().max(0)),
-}).strict();
 
-export const openAIApiSettingsSchema = z.object({
+export const AIApiSettingsSchema = z.object({
     key: z.string(),
     url: z.string().url(),
-    model: z.string(),
 }).strict();
 
-export const ollamaApiSettingsSchema = z.object({
-    url: z.string().url(),
-    model: z.string(),
-}).strict();
 
 export const modelOptionsSchema = z.object({
     temperature: z.number()
@@ -48,7 +39,6 @@ export const modelOptionsSchema = z.object({
 }).strict();
 
 export const fewShotExampleSchema = z.object({
-    // TODO: figure out how to make this compatible with the context enum and its namespace.
     context: z.enum(["Text", "Heading", "BlockQuotes", "UnorderedList", "NumberedList", "CodeBlock", "MathBlock", "TaskList"]),
     input: z.string().min(3, {message: "The Input must be at least 3 characters long"}),
     answer: z.string().min(3, {message: "The Answer must be at least 3 characters long"}),

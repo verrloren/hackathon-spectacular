@@ -68,7 +68,7 @@ class PredictingState extends State {
 
         if (result.isErr()) {
             new Notice(
-                `Copilot: Something went wrong cannot make a prediction. Full error is available in the dev console. Please check your settings. `
+                `Spectacular: Something went wrong cannot make a prediction. Full error is available in the dev console. Please check your settings. `
             );
             console.error(result.error);
             this.context.transitionToIdleState();

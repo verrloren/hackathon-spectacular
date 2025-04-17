@@ -211,7 +211,7 @@ class EventListener implements EventHandler, SettingsObserver {
     }
 
     getStatusBarText(): string {
-        return `Copilot: ${this.state.getStatusBarText()}`;
+        return `Spectacular: ${this.state.getStatusBarText()}`;
     }
 
     handleSettingChanged(settings: Settings): void {

@@ -89,7 +89,7 @@ function TriggerSettings(props: IProps): React.JSX.Element {
 
             {triggers.map((trigger: Trigger, index: number) => (
                 <div
-                    className="setting-list-item-copilot-auto-completion"
+                    className="setting-list-item-spectacular-auto-completion"
                     key={`setting-list-item-${name.replace(" ", "-")}-${index}`}
                 >
                     {(props.errorMessages.get(`triggers.${index}.value`) !== undefined || props.errorMessages.get(`triggers.${index}.type`) !== undefined) &&  (

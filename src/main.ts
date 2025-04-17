@@ -15,7 +15,7 @@ import {DEFAULT_SETTINGS, Settings} from "./settings/versions";
 import {deserializeSettings, serializeSettings} from "./settings/utils";
 
 
-export default class CopilotPlugin extends Plugin {
+export default class SpectacularPlugin extends Plugin {
     async onload() {
         const settings = await this.loadSettings();
 
@@ -154,7 +154,7 @@ export default class CopilotPlugin extends Plugin {
         if (result.isOk()) {
             return result.value;
         } else {
-            new Notice("Copilot: Could not load settings, reverting to default settings");
+            new Notice("Spectacular: Could not load settings, reverting to default settings");
             console.error(result.error);
             return DEFAULT_SETTINGS
         }

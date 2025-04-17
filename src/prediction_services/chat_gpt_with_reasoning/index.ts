@@ -15,7 +15,7 @@ import RemoveCodeIndicators from "../post_processors/remove_code_indicators";
 import RemoveMathIndicators from "../post_processors/remove_math_indicators";
 import DataViewRemover from "../pre_processors/data_view_remover";
 import LengthLimiter from "../pre_processors/length_limiter";
-import OpenAIApiClient from "../api_clients/OpenAIApiClient";
+import OpenAIApiClient from "../api_clients/AIApiClient";
 import AzureOAIClient from "../api_clients/AzureOAIClient";
 import RemoveOverlap from "../post_processors/remove_overlap";
 import {FewShotExample, Settings} from "../../settings/versions";
@@ -141,12 +141,12 @@ class ChatGPTWithReasoning implements PredictionService {
         ];
 
         if (this.debugMode) {
-            console.log("Copilot messages send:\n", messages);
+            console.log("Spectacular messages send:\n", messages);
         }
 
         let result = await this.client.queryChatModel(messages);
         if (this.debugMode && result.isOk()) {
-            console.log("Copilot response:\n", result.value);
+            console.log("Spectacular response:\n", result.value);
         }
 
         result = this.extractAnswerFromChainOfThoughts(result);

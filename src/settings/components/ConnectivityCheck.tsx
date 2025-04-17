@@ -3,7 +3,7 @@ import {useState} from "react";
 import SettingsItem from "./SettingsItem";
 import {Notice} from "obsidian";
 import AzureOAIClient from "../../prediction_services/api_clients/AzureOAIClient";
-import OpenAIApiClient from "../../prediction_services/api_clients/OpenAIApiClient";
+import OpenAIApiClient from "../../prediction_services/api_clients/AIApiClient";
 import {Settings} from "../versions";
 import OllamaApiClient from "../../prediction_services/api_clients/OllamaApiClient";
 
@@ -71,11 +71,11 @@ export default function ConnectivityCheck(props: IProps): React.JSX.Element {
 
     const ProgressFeedback = () => {
         if (status === Status.Loading) {
-            return <span className="loader-copilot-auto-completion"/>;
+            return <span className="loader-spectacular-auto-completion"/>;
         }
         if (status === Status.Success) {
             return (
-                <span className={"loader-placeholder-copilot-auto-completion"}>
+                <span className={"loader-placeholder-spectacular-auto-completion"}>
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="100%"
@@ -95,7 +95,7 @@ export default function ConnectivityCheck(props: IProps): React.JSX.Element {
         }
         if (status === Status.Failure) {
             return (
-                <span className={"loader-placeholder-copilot-auto-completion"}>
+                <span className={"loader-placeholder-spectacular-auto-completion"}>
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="24"
@@ -115,7 +115,7 @@ export default function ConnectivityCheck(props: IProps): React.JSX.Element {
             );
         }
 
-        return <span className={"loader-placeholder-copilot-auto-completion"}/>;
+        return <span className={"loader-placeholder-spectacular-auto-completion"}/>;
     };
 
     return (

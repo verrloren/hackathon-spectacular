@@ -9,8 +9,6 @@ import TriggerSettings from "./components/TriggerSettings";
 import SettingsItem from "./components/SettingsItem";
 import CheckBoxSettingItem from "./components/CheckBoxSettingItem";
 import FewShotExampleSettings from "./components/FewShotExampleSettings";
-import ConnectivityCheck from "./components/ConnectivityCheck";
-import DropDownSettingItem from "./components/DropDownSettingItem";
 import {Notice} from "obsidian";
 import {
     DEFAULT_SETTINGS,
@@ -53,168 +51,12 @@ export default function SettingsView(props: IProps): React.JSX.Element {
         });
     };
     const resetSettings = () => {
-        const azureOAIApiSettings = {
-            ...settings.azureOAIApiSettings,
-        };
-        const openAIApiSettings = {
-           ... settings.openAIApiSettings,
-        };
-        const ollamaApiSettings = {
-            ...settings.ollamaApiSettings,
-        }
-
         const newSettings: Settings = {
             ...DEFAULT_SETTINGS,
-            apiProvider: settings.apiProvider,
-            azureOAIApiSettings,
-            openAIApiSettings,
-            ollamaApiSettings,
             advancedMode: settings.advancedMode,
         };
         updateSettings(newSettings);
         new Notice("Factory reset complete.");
-    };
-
-
-    const renderAPISettings = () => {
-        if (settings.apiProvider === "azure") {
-            return (
-                <>
-                    <TextSettingItem
-                        name={"Azure OAI API URL"}
-                        description={
-                            "The Azure OpenAI services API URL is used in the requests."
-                        }
-                        placeholder={"Your API URL..."}
-                        value={settings.azureOAIApiSettings.url}
-                        errorMessage={errors.get("azureOAIApiSettings.url")}
-                        setValue={(value: string) =>
-                            updateSettings({
-                                azureOAIApiSettings: {
-                                    ...settings.azureOAIApiSettings,
-                                    url: value,
-                                },
-                            })
-                        }
-                    />
-                    <TextSettingItem
-                        name={"Azure API key"}
-                        description={
-                            "The Azure OpenAI services API key used in the requests."
-                        }
-                        placeholder={"Your API key..."}
-                        password
-                        value={settings.azureOAIApiSettings.key}
-                        errorMessage={errors.get("azureOAIApiSettings.key")}
-                        setValue={(value: string) =>
-                            updateSettings({
-                                azureOAIApiSettings: {
-                                    ...settings.azureOAIApiSettings,
-                                    key: value,
-                                },
-                            })
-                        }
-                    />
-                    <ConnectivityCheck key={"azure"} settings={settings}/>
-                </>
-            );
-        }
-        if (settings.apiProvider === "openai") {
-            return (
-                <>
-                    <TextSettingItem
-                        name={"OpenAI API URL"}
-                        description={
-                            "The URL used in the requests."
-                        }
-                        placeholder={"Your API URL..."}
-                        value={settings.openAIApiSettings.url}
-                        errorMessage={errors.get("openAIApiSettings.url")}
-                        setValue={(value: string) =>
-                            updateSettings({
-                                openAIApiSettings: {
-                                    ...settings.openAIApiSettings,
-                                    url: value,
-                                },
-                            })
-                        }
-                    />
-                    <TextSettingItem
-                        name={"OpenAI API key"}
-                        description={"The API key used in the requests."}
-                        placeholder={"Your API key..."}
-                        password
-                        value={settings.openAIApiSettings.key}
-                        errorMessage={errors.get("openAIApiSettings.key")}
-                        setValue={(value: string) =>
-                            updateSettings({
-                                openAIApiSettings: {
-                                    ...settings.openAIApiSettings,
-                                    key: value,
-                                },
-                            })
-                        }
-                    />
-                    <TextSettingItem
-                        name={"Model"}
-                        description={"The value of the model parameter in the request body."}
-                        placeholder="gpt-3.5-turbo"
-                        value={settings.openAIApiSettings.model}
-                        setValue={(value: string) =>
-                            updateSettings({
-                                openAIApiSettings: {
-                                    ...settings.openAIApiSettings,
-                                    model: value,
-                                }
-                            })
-                        }
-                        errorMessage={errors.get("openAIApiSettings.model")}
-                    />
-
-                    <ConnectivityCheck key={"openai"} settings={settings}/>
-                </>
-            );
-        }
-        if (settings.apiProvider === "ollama") {
-            return (
-                <>
-                    <TextSettingItem
-                        name={"API URL"}
-                        description={
-                            "The URL used in the requests."
-                        }
-                        placeholder={"Your API URL..."}
-                        value={settings.ollamaApiSettings.url}
-                        errorMessage={errors.get("ollamaApiSettings.url")}
-                        setValue={(value: string) =>
-                            updateSettings({
-                                ollamaApiSettings: {
-                                    ...settings.ollamaApiSettings,
-                                    url: value,
-                                },
-                            })
-                        }
-                    />
-                    <TextSettingItem
-                        name={"Model"}
-                        description={"The model you have locally running using OLLAMA."}
-                        placeholder="Your model name..."
-                        value={settings.ollamaApiSettings.model}
-                        setValue={(value: string) =>
-                            updateSettings({
-                                ollamaApiSettings: {
-                                    ...settings.ollamaApiSettings,
-                                    model: value,
-                                }
-                            })
-                        }
-                        errorMessage={errors.get("ollamaApiSettings.model")}
-                    />
-
-                    <ConnectivityCheck key={"openai"} settings={settings}/>
-                </>
-            );
-        }
     };
 
     return (
@@ -236,24 +78,6 @@ export default function SettingsView(props: IProps): React.JSX.Element {
                 enabled={settings.cacheSuggestions}
                 setEnabled={(value) => updateSettings({cacheSuggestions: value})}
             />
-            <DropDownSettingItem
-                name={"API provider"}
-                description={
-                    "The plugin supports multiple API providers. Each provider might require different settings."
-                }
-                value={settings.apiProvider}
-                setValue={(value: string) => {
-                    if (value === "openai" || value === "azure" || value === "ollama") {
-                        updateSettings({apiProvider: value});
-                    }
-                }}
-                options={{
-                    openai: "OpenAI API",
-                    azure: "Azure OAI API",
-                    ollama: "Self-hosted OLLAMA API"
-                }}
-                errorMessage={errors.get("apiProvider")}
-            />
             <CheckBoxSettingItem
                 name={"Debug mode"}
                 description={
@@ -263,8 +87,6 @@ export default function SettingsView(props: IProps): React.JSX.Element {
                 setEnabled={(value) => updateSettings({debugMode: value})}
             />
 
-            <h2>API</h2>
-            {renderAPISettings()}
 
 
             <h2>Model Options</h2>
@@ -306,7 +128,7 @@ export default function SettingsView(props: IProps): React.JSX.Element {
                 max={MAX_TOP_P}
                 step={0.05}
             />
-            {settings.apiProvider !== "ollama" && (<>
+            {settings.apiProvider && (<>
                 <SliderSettingsItem
                     name={"Frequency Penalty"}
                     description={
@@ -483,7 +305,7 @@ export default function SettingsView(props: IProps): React.JSX.Element {
                 errorMessage={errors.get("ignoredFilePatterns")}
             >
                 <textarea
-                    className="setting-item-text-area-copilot-auto-completion"
+                    className="setting-item-text-area-spectacular-auto-completion"
                     rows={10}
                     placeholder="Your file patterns, e.g., **/secret/**"
                     value={settings.ignoredFilePatterns}
@@ -508,7 +330,7 @@ export default function SettingsView(props: IProps): React.JSX.Element {
                 errorMessage={errors.get("ignoredTags")}
             >
                 <textarea
-                    className="setting-item-text-area-copilot-auto-completion"
+                    className="setting-item-text-area-spectacular-auto-completion"
                     rows={10}
                     placeholder="Your file tags, e.g., secret"
                     value={settings.ignoredTags}
@@ -570,7 +392,7 @@ export default function SettingsView(props: IProps): React.JSX.Element {
                         errorMessage={errors.get("systemMessage")}
                     >
                         <textarea
-                            className="setting-item-text-area-copilot-auto-completion"
+                            className="setting-item-text-area-spectacular-auto-completion"
                             rows={10}
                             placeholder="Your system message..."
                             value={settings.systemMessage}
@@ -591,7 +413,7 @@ export default function SettingsView(props: IProps): React.JSX.Element {
                         errorMessage={errors.get("userMessageTemplate")}
                     >
                         <textarea
-                            className="setting-item-text-area-copilot-auto-completion"
+                            className="setting-item-text-area-spectacular-auto-completion"
                             rows={3}
                             placeholder="{{prefix}}<mask/>{{suffix}}"
                             value={settings.userMessageTemplate}

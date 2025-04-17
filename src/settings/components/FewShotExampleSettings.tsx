@@ -198,7 +198,7 @@ export default function FewShotExampleSettings(
                                 </div>
                             )}
                             <textarea
-                                className="setting-item-text-area-copilot-auto-completion"
+                                className="setting-item-text-area-spectacular-auto-completion"
                                 rows={5}
                                 style={{ width: "100%" }}
                                 value={example.input}
@@ -218,7 +218,7 @@ export default function FewShotExampleSettings(
                                 </div>
                             )}
                             <textarea
-                                className="setting-item-text-area-copilot-auto-completion"
+                                className="setting-item-text-area-spectacular-auto-completion"
                                 rows={5}
                                 style={{ width: "100%" }}
                                 value={example.answer}
