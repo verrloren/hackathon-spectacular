@@ -69,6 +69,7 @@ export const settingsSchema = z.object({
 	),
 	cacheSuggestions: z.boolean(),
 	debugMode: z.boolean(),
+	wsDebounceMillis: z.number().int().min(0).optional(), // Add wsDebounceMillis
 }).strict();
 // ...existing code...
 
@@ -129,6 +130,7 @@ export const DEFAULT_SETTINGS: Settings = {
     ignoredTags: "",
     cacheSuggestions: true,
     debugMode: false,
+	wsDebounceMillis: 1000 * 60 * 5, // Add default value (e.g., 5 minutes)
 	};
 
 	export const pluginDataSchema = z.object({

@@ -1,26 +1,31 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import StatusBar from "./status_bar";
-import {DocumentChanges} from "./render_plugin/document_changes_listener";
-import {cancelSuggestion, insertSuggestion, updateSuggestion} from "./render_plugin/states";
-import {EditorView} from "@codemirror/view";
+import { DocumentChanges } from "./render_plugin/document_changes_listener";
+import {
+    cancelSuggestion,
+    insertSuggestion,
+    updateSuggestion,
+} from "./render_plugin/states";
+import { EditorView } from "@codemirror/view";
 import State from "./states/state";
-import {EventHandler} from "./states/types";
+import { EventHandler } from "./states/types";
 import InitState from "./states/init_state";
 import IdleState from "./states/idle_state";
 import SuggestingState from "./states/suggesting_state";
-import {PredictionService} from "./prediction_services/types";
-import {checkForErrors} from "./settings/utils";
+import { checkForErrors } from "./settings/utils";
 import Context from "./context_detection";
-import {Settings} from "./settings/versions";
-import {SettingsObserver} from "./settings/SettingsTab";
-import {isMatchBetweenPathAndPatterns} from "./utils";
+import { Settings } from "./settings/versions";
+import { SettingsObserver } from "./settings/SettingsTab";
+import { isMatchBetweenPathAndPatterns } from "./utils";
 import DisabledManualState from "./states/disabled_manual_state";
 import DisabledFileSpecificState from "./states/disabled_file_specific_state";
-import {LRUCache} from "lru-cache";
+import { LRUCache } from "lru-cache";
 import DisabledInvalidSettingsState from "./states/disabled_invalid_settings_state";
 import QueuedState from "./states/queued_state";
 import PredictingState from "./states/predicting_state";
 import { App, TFile } from "obsidian";
-
+import { Connection, ConnectionFactory, Session } from "./websocket/types";
+import WebSocketConnectionFactory from "./websocket/factory";
 
 const FIVE_MINUTES_IN_MS = 1000 * 60 * 5;
 const MAX_N_ITEMS_IN_CACHE = 5000;
@@ -32,28 +37,28 @@ class EventListener implements EventHandler, SettingsObserver {
     private statusBar: StatusBar;
     private app: App;
     context: Context = Context.Text;
-    predictionService: PredictionService;
     settings: Settings;
     private currentFile: TFile | null = null;
-    private suggestionCache = new LRUCache<string, string>({max: MAX_N_ITEMS_IN_CACHE, ttl: FIVE_MINUTES_IN_MS});
+    private suggestionCache = new LRUCache<string, string>({
+        max: MAX_N_ITEMS_IN_CACHE,
+        ttl: FIVE_MINUTES_IN_MS,
+    });
+
+    public wsConnection: Connection | null = null;
+    private wsConnectionFactory: ConnectionFactory;
+    private isWsConnecting: boolean;
+    private wsInitializationPromise: Promise<void> | null = null;
 
     public static fromSettings(
         settings: Settings,
         statusBar: StatusBar,
         app: App
     ): EventListener {
-        const predictionService = createPredictionService(settings);
-
-        const eventListener = new EventListener(
-            settings,
-            statusBar,
-            app,
-            predictionService
-        );
+        const eventListener = new EventListener(settings, statusBar, app);
 
         const settingErrors = checkForErrors(settings);
         if (settings.enabled) {
-            eventListener.transitionToIdleState()
+            eventListener.transitionToIdleState();
         } else if (settingErrors.size > 0) {
             eventListener.transitionToDisabledInvalidSettingsState();
         } else if (!settings.enabled) {
@@ -63,16 +68,99 @@ class EventListener implements EventHandler, SettingsObserver {
         return eventListener;
     }
 
-    private constructor(
-        settings: Settings,
-        statusBar: StatusBar,
-        app: App,
-        predictionService: PredictionService
-    ) {
+    private constructor(settings: Settings, statusBar: StatusBar, app: App) {
         this.settings = settings;
         this.statusBar = statusBar;
         this.app = app;
-        this.predictionService = predictionService;
+        this.wsConnectionFactory = new WebSocketConnectionFactory();
+    }
+
+    private async initializeWebSocket(): Promise<void> {
+        // Prevent concurrent initializations
+        if (this.isWsConnecting) {
+            // Wait for the ongoing connection attempt
+            await this.wsInitializationPromise;
+            return;
+        }
+        // Don't reconnect if already connected
+        if (this.wsConnection) {
+            return;
+        }
+
+        if (!this.settings.enabled) {
+            console.log("Plugin disabled, skipping WebSocket connection.");
+            // No need to throw error, just don't connect
+            return;
+        }
+
+        this.isWsConnecting = true;
+        this.updateStatusBarText();
+        console.log("Initializing WebSocket connection...");
+
+        this.wsInitializationPromise = (async () => {
+            try {
+                this.wsConnection =
+                    await this.wsConnectionFactory.createConnection(
+                        () => this.handleWebSocketClose(), 
+                        this.settings.wsDebounceMillis
+                    );
+
+                // Session should be available after connection resolves
+                console.log(
+                    "WebSocket connected. Session:",
+                    this.wsConnection.getSession()
+                );
+
+                this.wsConnection.setErrorHandler((error) =>
+                    this.handleWebSocketError(error)
+                );
+
+                // Transition to Idle only if starting from Init and settings are valid
+                if (
+                    this.state instanceof InitState &&
+                    this.settings.enabled &&
+                    checkForErrors(this.settings).size === 0
+                ) {
+                    this.transitionToIdleState();
+                }
+            } catch (error) {
+                console.error(
+                    "Failed to establish WebSocket connection:",
+                    error
+                );
+                this.wsConnection = null; // Ensure connection is null on failure
+                // Optionally transition to an error state or notify user
+            } finally {
+                this.isWsConnecting = false;
+                this.wsInitializationPromise = null; // Clear the promise tracker
+                this.updateStatusBarText(); // Update status bar regardless of outcome
+            }
+        })();
+
+        await this.wsInitializationPromise;
+    }
+
+    private handleWebSocketClose(): void {
+        console.log("WebSocket connection closed.");
+        if (!this.isWsConnecting) {
+            this.wsConnection = null;
+            this.wsInitializationPromise = null;
+            this.updateStatusBarText();
+        }
+    }
+
+    private handleWebSocketError(error: any): void {
+        console.error("WebSocket error:", error);
+        if (!this.isWsConnecting) {
+            this.wsConnection?.close();
+            this.wsConnection = null;
+            this.wsInitializationPromise = null;
+            this.updateStatusBarText();
+        }
+    }
+
+    public getSession(): Session | null {
+        return this.wsConnection ? this.wsConnection.getSession() : null;
     }
 
     public setContext(context: Context): void {
@@ -94,7 +182,6 @@ class EventListener implements EventHandler, SettingsObserver {
     public handleFileChange(file: TFile): void {
         this.currentFile = file;
         this.state.handleFileChange(file);
-
     }
 
     public isCurrentFilePathIgnored(): boolean {
@@ -110,17 +197,18 @@ class EventListener implements EventHandler, SettingsObserver {
             return false;
         }
 
-        const ignoredTags = this.settings.ignoredTags.toLowerCase().split('\n');
+        const ignoredTags = this.settings.ignoredTags.toLowerCase().split("\n");
 
         const metadata = this.app.metadataCache.getFileCache(this.currentFile);
         if (!metadata || !metadata.tags) {
             return false;
         }
 
-        const tags = metadata.tags.map(tag => tag.tag.replace(/#/g, '').toLowerCase());
-        return tags.some(tag => ignoredTags.includes(tag));
+        const tags = metadata.tags.map((tag) =>
+            tag.tag.replace(/#/g, "").toLowerCase()
+        );
+        return tags.some((tag) => ignoredTags.includes(tag));
     }
-
 
     insertCurrentSuggestion(suggestion: string): void {
         if (this.view === null) {
@@ -157,20 +245,13 @@ class EventListener implements EventHandler, SettingsObserver {
 
     transitionToQueuedState(prefix: string, suffix: string): void {
         this.transitionTo(
-            QueuedState.createAndStartTimer(
-                this,
-                prefix,
-                suffix
-            )
+            QueuedState.createAndStartTimer(this, prefix, suffix)
         );
     }
 
     transitionToPredictingState(prefix: string, suffix: string): void {
-        this.transitionTo(PredictingState.createAndStartPredicting(
-                this,
-                prefix,
-                suffix
-            )
+        this.transitionTo(
+            PredictingState.createAndStartPredicting(this, prefix, suffix)
         );
     }
 
@@ -190,7 +271,9 @@ class EventListener implements EventHandler, SettingsObserver {
         if (addToCache) {
             this.addSuggestionToCache(prefix, suffix, suggestion);
         }
-        this.transitionTo(new SuggestingState(this, suggestion, prefix, suffix));
+        this.transitionTo(
+            new SuggestingState(this, suggestion, prefix, suffix)
+        );
         updateSuggestion(this.view, suggestion);
     }
 
@@ -204,7 +287,6 @@ class EventListener implements EventHandler, SettingsObserver {
         }
     }
 
-
     private updateStatusBarText(): void {
         this.statusBar.updateText(this.getStatusBarText());
     }
@@ -215,7 +297,6 @@ class EventListener implements EventHandler, SettingsObserver {
 
     handleSettingChanged(settings: Settings): void {
         this.settings = settings;
-        this.predictionService = createPredictionService(settings);
         if (!this.settings.cacheSuggestions) {
             this.clearSuggestionsCache();
         }
@@ -226,6 +307,15 @@ class EventListener implements EventHandler, SettingsObserver {
     async handleDocumentChange(
         documentChanges: DocumentChanges
     ): Promise<void> {
+        if (
+            !this.wsConnection &&
+            this.settings.enabled &&
+            !this.isWsConnecting
+        ) {
+            this.initializeWebSocket().catch((err) => {
+                console.error("Background WebSocket connection failed:", err);
+            });
+        }
         await this.state.handleDocumentChange(documentChanges);
     }
 
@@ -249,14 +339,18 @@ class EventListener implements EventHandler, SettingsObserver {
         this.state.handleAcceptCommand();
     }
 
-    containsTriggerCharacters(
-        documentChanges: DocumentChanges
-    ): boolean {
+    containsTriggerCharacters(documentChanges: DocumentChanges): boolean {
         for (const trigger of this.settings.triggers) {
-            if (trigger.type === "string" && documentChanges.getPrefix().endsWith(trigger.value)) {
+            if (
+                trigger.type === "string" &&
+                documentChanges.getPrefix().endsWith(trigger.value)
+            ) {
                 return true;
             }
-            if (trigger.type === "regex" && documentChanges.getPrefix().match(trigger.value)) {
+            if (
+                trigger.type === "regex" &&
+                documentChanges.getPrefix().match(trigger.value)
+            ) {
                 return true;
             }
         }
@@ -264,14 +358,21 @@ class EventListener implements EventHandler, SettingsObserver {
     }
 
     public isDisabled(): boolean {
-        return this.state instanceof DisabledManualState || this.state instanceof DisabledInvalidSettingsState || this.state instanceof DisabledFileSpecificState;
+        return (
+            this.state instanceof DisabledManualState ||
+            this.state instanceof DisabledInvalidSettingsState ||
+            this.state instanceof DisabledFileSpecificState
+        );
     }
 
     public isIdle(): boolean {
         return this.state instanceof IdleState;
     }
 
-    public getCachedSuggestionFor(prefix: string, suffix: string): string | undefined {
+    public getCachedSuggestionFor(
+        prefix: string,
+        suffix: string
+    ): string | undefined {
         return this.suggestionCache.get(this.getCacheKey(prefix, suffix));
     }
 
@@ -279,23 +380,25 @@ class EventListener implements EventHandler, SettingsObserver {
         const nCharsToKeepPrefix = prefix.length;
         const nCharsToKeepSuffix = suffix.length;
 
-        return `${prefix.substring(prefix.length - nCharsToKeepPrefix)}<mask/>${suffix.substring(0, nCharsToKeepSuffix)}`
+        return `${prefix.substring(
+            prefix.length - nCharsToKeepPrefix
+        )}<mask/>${suffix.substring(0, nCharsToKeepSuffix)}`;
     }
 
     public clearSuggestionsCache(): void {
         this.suggestionCache.clear();
     }
 
-    public addSuggestionToCache(prefix: string, suffix: string, suggestion: string): void {
+    public addSuggestionToCache(
+        prefix: string,
+        suffix: string,
+        suggestion: string
+    ): void {
         if (!this.settings.cacheSuggestions) {
             return;
         }
         this.suggestionCache.set(this.getCacheKey(prefix, suffix), suggestion);
     }
-}
-
-function createPredictionService(settings: Settings) {
-    return ChatGPTWithReasoning.fromSettings(settings);
 }
 
 export default EventListener;

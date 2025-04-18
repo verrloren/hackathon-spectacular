@@ -3,12 +3,15 @@ import { DocumentChanges } from "../render_plugin/document_changes_listener";
 import EventListener from "../event_listener";
 import { Notice } from "obsidian";
 import Context from "../context_detection";
+import { v4 as uuidv4 } from "uuid";
+import { Connection, Session, WsPredictRequest, WsServerResponse } from "src/websocket/types";
 
 class PredictingState extends State {
     private predictionPromise: Promise<void> | null = null;
     private isStillNeeded = true;
     private readonly prefix: string;
     private readonly suffix: string;
+		private currentRequestId: string | null = null;
 
     constructor(context: EventListener, prefix: string, suffix: string) {
         super(context);
@@ -46,42 +49,94 @@ class PredictingState extends State {
     }
 
     private cancelPrediction(): void {
-        this.isStillNeeded = false;
-        this.context.transitionToIdleState();
-    }
+			if (!this.isStillNeeded) return;
+			this.isStillNeeded = false;
+			const requestIdToCancel = this.currentRequestId;
+			this.currentRequestId = null;
+			console.log(`Cancelling prediction request (if sent): ${requestIdToCancel}`);
+			this.context.transitionToIdleState();
+	}
 
-    startPredicting(): void {
-        this.predictionPromise = this.predict();
-    }
+	startPredicting(): void {
+		if (!this.isStillNeeded) return;
+		this.predictionPromise = this.predict().catch(error => {
+				console.error("Prediction failed:", error);
+				if (this.isStillNeeded) {
+						new Notice(
+								`Spectacular: Prediction failed. ${error.message || 'Check console for details.'}`
+						);
+						this.context.transitionToIdleState();
+				}
+		});
+}
 
-    private async predict(): Promise<void> {
+private async predict(): Promise<void> {
+	const connection: Connection | null = this.context.wsConnection;
 
-        const result =
-            await this.context.predictionService?.fetchPredictions(
-                this.prefix,
-                this.suffix
-            );
+	if (!connection) {
+			console.log("Prediction skipped: No WebSocket connection.");
+			this.context.transitionToIdleState(); 
+			return;
+	}
 
-        if (!this.isStillNeeded) {
-            return;
-        }
+	const currentSession: Session | null = connection.getSession();
 
-        if (result.isErr()) {
-            new Notice(
-                `Spectacular: Something went wrong cannot make a prediction. Full error is available in the dev console. Please check your settings. `
-            );
-            console.error(result.error);
-            this.context.transitionToIdleState();
-        }
+	if (!currentSession) {
+			console.log("Prediction skipped: WebSocket session not yet established.");
+			this.context.transitionToIdleState();
+			return;
+	}
 
-        const prediction = result.unwrapOr("");
 
-        if (prediction === "") {
-            this.context.transitionToIdleState();
-            return;
-        }
-        this.context.transitionToSuggestingState(prediction, this.prefix, this.suffix);
-    }
+	this.currentRequestId = uuidv4();
+
+	const request: WsPredictRequest = {
+			id: this.currentRequestId,
+			event: "predict",
+			prefix: this.prefix,
+			suffix: this.suffix,
+			session: currentSession, 
+	};
+
+	console.log(`Sending prediction request: ${this.currentRequestId}`);
+
+	try {
+			const result: WsServerResponse = await connection.send(request);
+
+			if (!this.isStillNeeded || result.id !== this.currentRequestId) {
+					console.log(`Prediction response received but no longer needed or ID mismatch: ${result.id}`);
+					return; // Don't process the result
+			}
+
+			if (result.errorCode !== 0 || !('prediction' in result)) { 
+					this.context.transitionToIdleState();
+					return;
+			}
+
+			const prediction = result.prediction || ""; 
+
+			if (prediction.trim() === "") {
+					console.log("Prediction returned empty result.");
+					this.context.transitionToIdleState();
+					return;
+			}
+
+			this.context.transitionToSuggestingState(prediction, this.prefix, this.suffix);
+
+	} catch (error) {
+			console.error("Error sending prediction request or receiving response:", error);
+			if (this.isStillNeeded) { // Only show notice if still relevant
+					new Notice(
+							`Spectacular: Failed to get prediction. ${error.message || 'Check console.'}`
+					);
+					this.context.transitionToIdleState();
+			}
+	} finally {
+			if (this.isStillNeeded) {
+					this.currentRequestId = null;
+			}
+	}
+}
 
 
     getStatusBarText(): string {
