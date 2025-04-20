@@ -1,7 +1,7 @@
 # Demo vault Readme
 This is a demo Obsidian vault for testing the plugin.
 The command `npm run dev` will ensure the plugin artifacts are symlinked to correct locations allowing you to test the plugin in this vault.
-The file contains some example notes with useful content for testing the plugin.
+The file contains some example notes with useful content for testing the plugin.asdfasdffasdff
 
 The following files are used to test certain completion scenarios:
 - `Block quote (a tale of two cities).md`: contains an example note with a block quote. The plugin should be able to complete the block quote.

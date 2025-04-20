@@ -53,14 +53,14 @@ class PredictingState extends State {
 			this.isStillNeeded = false;
 			const requestIdToCancel = this.currentRequestId;
 			this.currentRequestId = null;
-			console.log(`Cancelling prediction request (if sent): ${requestIdToCancel}`);
+			console.log(`canceled current request id: ${requestIdToCancel}`);
 			this.context.transitionToIdleState();
 	}
 
 	startPredicting(): void {
 		if (!this.isStillNeeded) return;
 		this.predictionPromise = this.predict().catch(error => {
-				console.error("Prediction failed:", error);
+				new Notice("Prediction failed:", error);
 				if (this.isStillNeeded) {
 						new Notice(
 								`Spectacular: Prediction failed. ${error.message || 'Check console for details.'}`
@@ -74,7 +74,7 @@ private async predict(): Promise<void> {
 	const connection: Connection | null = this.context.wsConnection;
 
 	if (!connection) {
-			console.log("Prediction skipped: No WebSocket connection.");
+			new Notice("Prediction skipped: No WebSocket connection.");
 			this.context.transitionToIdleState(); 
 			return;
 	}
@@ -98,13 +98,13 @@ private async predict(): Promise<void> {
 			session: currentSession, 
 	};
 
-	console.log(`Sending prediction request: ${this.currentRequestId}`);
+	new Notice(`Sending prediction request: ${this.currentRequestId}`);
 
 	try {
 			const result: WsServerResponse = await connection.send(request);
 
 			if (!this.isStillNeeded || result.id !== this.currentRequestId) {
-					console.log(`Prediction response received but no longer needed or ID mismatch: ${result.id}`);
+					new Notice(`Prediction response received but no longer needed or ID mismatch: ${result.id}`);
 					return; // Don't process the result
 			}
 
@@ -116,7 +116,7 @@ private async predict(): Promise<void> {
 			const prediction = result.prediction || ""; 
 
 			if (prediction.trim() === "") {
-					console.log("Prediction returned empty result.");
+					new Notice("Prediction returned empty result.");
 					this.context.transitionToIdleState();
 					return;
 			}
@@ -124,7 +124,7 @@ private async predict(): Promise<void> {
 			this.context.transitionToSuggestingState(prediction, this.prefix, this.suffix);
 
 	} catch (error) {
-			console.error("Error sending prediction request or receiving response:", error);
+			new Notice("Error sending prediction request or receiving response:", error);
 			if (this.isStillNeeded) { // Only show notice if still relevant
 					new Notice(
 							`Spectacular: Failed to get prediction. ${error.message || 'Check console.'}`

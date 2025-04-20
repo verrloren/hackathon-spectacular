@@ -32,16 +32,15 @@ export interface WsPredictResponse extends WsBase {
 	errorMessage?: string;
 }
 
-// Add type for server sending session info
 export interface WsSessionInfoResponse extends WsBase {
 	event: 'sessionInfo';
-	session: Session; // Server provides the session
-	errorCode: 0; // Typically 0 for success
+	session: Session; 
+	errorCode: 0;
+	errorMessage?: string;
 }
 
 export type WsClientRequest = WsPredictRequest
 
-// Update server response union type
 export type WsServerResponse = WsPredictResponse | WsSessionInfoResponse;
 
 export interface Connection {
@@ -55,18 +54,18 @@ export interface Connection {
 
 export interface ConnectionFactory {
     createConnection(
-        // REMOVED: session: Session, - Session is established by the server after connection
+				hostUrl: string,
         closeHandler: (() => void) | null,
         idleTimeoutMillis?: number
     ): Promise<Connection>;
 }
 
 export interface UserContext {
-	userId?: number;
+	userId?: string;
 }
 
 export interface Session {
-	sid: number;
+	sid: string;
 }
 
 export interface IConnectionService {

@@ -6,8 +6,8 @@ import Context from "../context_detection";
 
 class QueuedState extends State {
     private timer: ReturnType<typeof setTimeout> | null = null;
-    private readonly prefix: string;
-    private readonly suffix: string;
+    private currentPrefix: string;
+    private currentSuffix: string;
 
 
     private constructor(
@@ -16,8 +16,8 @@ class QueuedState extends State {
         suffix: string
     ) {
         super(context);
-        this.prefix = prefix;
-        this.suffix = suffix;
+        this.currentPrefix = prefix;
+        this.currentSuffix = suffix;
     }
 
     static createAndStartTimer(
@@ -40,31 +40,39 @@ class QueuedState extends State {
     async handleDocumentChange(
         documentChanges: DocumentChanges
     ): Promise<void> {
-        if (
-            documentChanges.isDocInFocus() &&
-            documentChanges.isTextAdded() &&
-            this.context.containsTriggerCharacters(documentChanges)
-        ) {
-            this.cancelTimer();
-            this.context.transitionToQueuedState(documentChanges.getPrefix(), documentChanges.getSuffix());
-            return
-        }
-        if (
-            (documentChanges.hasCursorMoved() ||
-            documentChanges.hasUserTyped() ||
-            documentChanges.hasUserDeleted() ||
-            documentChanges.isTextAdded() ||
-            !documentChanges.isDocInFocus())
-        ) {
-            this.cancelTimer();
-            this.context.transitionToIdleState();
-        }
-    }
+			if (
+				!documentChanges.isDocInFocus() ||
+				documentChanges.hasCursorMoved() || // Cursor moved without typing
+				documentChanges.hasSelection() ||
+				documentChanges.hasMultipleCursors() ||
+				documentChanges.hasUserDeleted() || // Deletion cancels queue
+				documentChanges.hasUserUndone() ||
+				documentChanges.hasUserRedone()
+		) {
+				this.cancelTimer();
+				this.context.transitionToIdleState();
+				return;
+		}
+		const isTyping = documentChanges.isTextAdded() || documentChanges.hasUserTyped();
+
+		if (isTyping) {
+				this.currentPrefix = documentChanges.getPrefix();
+				this.currentSuffix = documentChanges.getSuffix();
+
+				const cachedSuggestion = this.context.getCachedSuggestionFor(this.currentPrefix, this.currentSuffix);
+				if (this.context.settings.cacheSuggestions && cachedSuggestion !== undefined && cachedSuggestion.trim().length > 0) {
+						this.cancelTimer();
+						this.context.transitionToSuggestingState(cachedSuggestion, this.currentPrefix, this.currentSuffix, false);
+						return;
+				}
+
+				this.startTimer();
+    }}
 
     startTimer(): void {
         this.cancelTimer();
         this.timer = setTimeout(() => {
-            this.context.transitionToPredictingState(this.prefix, this.suffix);
+            this.context.transitionToPredictingState(this.currentPrefix, this.currentSuffix);
         }, this.context.settings.delay);
     }
 
@@ -74,6 +82,10 @@ class QueuedState extends State {
             this.timer = null;
         }
     }
+
+		destructor(): void {
+			this.cancelTimer();
+	}
 
     getStatusBarText(): string {
         return `Queued (${this.context.settings.delay} ms)`;

@@ -10,6 +10,7 @@ class IdleState extends State {
         if (
             !documentChanges.isDocInFocus()
             || !documentChanges.hasDocChanged()
+						// Don't trigger on deletion, selection, multiple cursors, undo/redo
             || documentChanges.hasUserDeleted()
             || documentChanges.hasMultipleCursors()
             || documentChanges.hasSelection()
@@ -19,18 +20,33 @@ class IdleState extends State {
             return;
         }
 
-        const cachedSuggestion = this.context.getCachedSuggestionFor(documentChanges.getPrefix(), documentChanges.getSuffix());
+				const isTyping = documentChanges.isTextAdded()
+
+				if(!isTyping) return;
+
+				const prefix = documentChanges.getPrefix();
+        const suffix = documentChanges.getSuffix();
+
+        const cachedSuggestion = this.context.getCachedSuggestionFor(prefix, suffix);
         const isThereCachedSuggestion = cachedSuggestion !== undefined && cachedSuggestion.trim().length > 0;
 
         if (this.context.settings.cacheSuggestions && isThereCachedSuggestion) {
-            this.context.transitionToSuggestingState(cachedSuggestion, documentChanges.getPrefix(), documentChanges.getSuffix());
+            this.context.transitionToSuggestingState(cachedSuggestion, prefix, suffix);
             return;
-
         }
+
+				if (
+					this.context.isCurrentFilePathIgnored() ||
+					this.context.currentFileContainsIgnoredTag()
+			) {
+					return;
+			}
 
         if (this.context.containsTriggerCharacters(documentChanges)) {
-           this.context.transitionToQueuedState(documentChanges.getPrefix(), documentChanges.getSuffix());
+           this.context.transitionToQueuedState(prefix, suffix);
         }
+
+				this.context.transitionToQueuedState(prefix, suffix);
     }
 
     handlePredictCommand(prefix: string, suffix: string): void {

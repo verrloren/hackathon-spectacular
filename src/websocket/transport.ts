@@ -3,6 +3,8 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import { IConnectionService, Session, UserContext } from './types';
 import { UserSessionData } from './UserSessionData';
+import { v4 as uuidv4 } from 'uuid';
+import { Notice } from 'obsidian';
 
 export class UserConnection {
     protected heartbeat: NodeJS.Timeout | undefined;
@@ -41,11 +43,11 @@ export default class Transport {
     };
 
     constructor() {
-        this.server = new WebSocketServer({ host: process.env.BACKEND_WS_HOST });
+        this.server = new WebSocketServer({ host: process.env.SPECTACULAR_TARGET_HOST });
         this.server.on('listening', () => console.log("WebSocket server is listening."));
         this.server.on('connection', this.onConnection.bind(this));
         this.server.on('error', (error) => {
-            console.error('WebSocket server error:', error)
+            new Notice('WebSocket server error:', error)
             process.exit(1);
         });
     }
@@ -55,59 +57,51 @@ export default class Transport {
     }
 
     private async onConnection(ws: WebSocket, req: IncomingMessage): Promise<void> {
-        try {
-					const session = { sid: 1448 };
-
-            const serverConnection = await this.connectionService.getConnection(session);
-            serverConnection.setCloseHandler(() => ws.close());
-            const user = serverConnection.userContext;
-
-            if (!user.userId) throw new Error('userId required');
-
-
-            let connection: UserConnection | null = new UserConnection(
-                this.connectionService,
-                ws,
-                user,
-                session,
-            );
-
-            connection.startHearbeat();
-
-            const onMessage = (data) => {
-                if (connection) {
-                    this.onMessage(connection, data);
-                }
-            };
-
-            const onError = (error: Error) => {
-                if (connection) {
-                    this.onError(connection, error);
-                }
-            };
-
-            const onClose = () => {
-                if (connection) {
-                    connection.stopHeartbeat();
-                    this.onClose(connection);
-
-                    ws.off('message', onMessage);
-                    ws.off('close', onClose);
-                    ws.off('error', onError);
-
-                    connection = null;
-                }
-            };
-
-            ws.on('message', onMessage);
-            ws.on('error', onError);
-            ws.on('close', onClose);
-        } catch (error) {
-            ws.close(1008, 'unauthorized');
-            return;
-        }
-
-        ws.send('o');
+			let session: Session | null = null
+			
+      try {
+				session = { sid: uuidv4()};
+          const serverConnection = await this.connectionService.getConnection(session);
+          serverConnection.setCloseHandler(() => ws.close());
+          const user = serverConnection.userContext;
+          if (!user.userId) throw new Error('userId required');
+          let connection: UserConnection | null = new UserConnection(
+              this.connectionService,
+              ws,
+              user,
+              session,
+          );
+					console.log(`WebSocket connection established: ${connection}`);
+          connection.startHearbeat();
+					
+          const onMessage = (data) => {
+              if (connection) {
+                  this.onMessage(connection, data);
+              }
+          };
+          const onError = (error: Error) => {
+              if (connection) {
+                  this.onError(connection, error);
+              }
+          };
+          const onClose = () => {
+              if (connection) {
+                  connection.stopHeartbeat();
+                  this.onClose(connection);
+                  ws.off('message', onMessage);
+                  ws.off('close', onClose);
+                  ws.off('error', onError);
+                  connection = null;
+              }
+          };
+          ws.on('message', onMessage);
+          ws.on('error', onError);
+          ws.on('close', onClose);
+      } catch (error) {
+          ws.close(1008, 'unauthorized');
+          return;
+      }
+      ws.send('o');
     }
 
     private parseRequestMessage(data: string): { event: string } | undefined {
@@ -135,14 +129,14 @@ export default class Transport {
         try {
             const msgData = this.parseRequestMessage(data.toString());
             if (!msgData) {
-                console.error({ request: data.toString(), userId: connection.user.userId }, 'Unknown request');
+                new Notice(`request: ${data.toString()}, userId: ${connection.user.userId}, Unknown request`);
                 connection.ws.close();
                 return;
             }
-						console.log(msgData)
+						new Notice(`${msgData}`)
 
         } catch (error) {
-            console.warn({ request: data.toString(), userId: connection.user.userId, error }, 'Client message error');
+           new Notice(`request: ${  data.toString()} userId: ${connection.user.userId, error}, Client message error`);
             connection.ws.close();
         }
     }
@@ -154,12 +148,12 @@ export default class Transport {
     }
 
     private onError(connection: UserConnection, error: Error): void {
-        console.warn({ error, userId: connection.user.userId }, 'WebSocket client error');
+        new Notice(`error: ${error}, userId: ${connection.user.userId }, 'WebSocket client error'`);
     }
 
     public close(): void {
         this.server.close(() => {
-            console.info('WebSocket closed');
+            new Notice('WebSocket closed');
         });
     }
 }

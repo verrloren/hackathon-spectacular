@@ -76,46 +76,48 @@ class EventListener implements EventHandler, SettingsObserver {
     }
 
     private async initializeWebSocket(): Promise<void> {
-        // Prevent concurrent initializations
         if (this.isWsConnecting) {
-            // Wait for the ongoing connection attempt
             await this.wsInitializationPromise;
             return;
         }
-        // Don't reconnect if already connected
-        if (this.wsConnection) {
+				if (this.wsConnection) {
+					if (!this.wsConnection.getSession()) {
+						console.warn("WebSocket connection exists but session is missing. Re-initializing.");
+					} else {
+						return;
+					}
+			}
+        if (!this.settings.enabled) {
+            console.log("Plugin disabled, skipping WebSocket connection.");
             return;
         }
 
-        if (!this.settings.enabled) {
-            console.log("Plugin disabled, skipping WebSocket connection.");
-            // No need to throw error, just don't connect
-            return;
-        }
+				if (!this.settings.webSocketUrl) {
+					console.log("WebSocket URL is not configured in settings. Skipping connection.");
+					this.transitionToDisabledInvalidSettingsState();
+					return;
+			}
 
         this.isWsConnecting = true;
         this.updateStatusBarText();
-        console.log("Initializing WebSocket connection...");
+        console.log("Initializing WebSocket connection to:", this.settings.webSocketUrl);
 
         this.wsInitializationPromise = (async () => {
             try {
                 this.wsConnection =
                     await this.wsConnectionFactory.createConnection(
-                        () => this.handleWebSocketClose(), 
-                        this.settings.wsDebounceMillis
+											this.settings.webSocketUrl,
+                      () => this.handleWebSocketClose(), 
+                      this.settings.wsDebounceMillis
                     );
+								
 
-                // Session should be available after connection resolves
-                console.log(
-                    "WebSocket connected. Session:",
-                    this.wsConnection.getSession()
-                );
+                console.log(`WebSocket connected. Session: ${this.wsConnection.getSession()}`);
 
                 this.wsConnection.setErrorHandler((error) =>
                     this.handleWebSocketError(error)
                 );
 
-                // Transition to Idle only if starting from Init and settings are valid
                 if (
                     this.state instanceof InitState &&
                     this.settings.enabled &&
@@ -124,16 +126,12 @@ class EventListener implements EventHandler, SettingsObserver {
                     this.transitionToIdleState();
                 }
             } catch (error) {
-                console.error(
-                    "Failed to establish WebSocket connection:",
-                    error
-                );
-                this.wsConnection = null; // Ensure connection is null on failure
-                // Optionally transition to an error state or notify user
+                console.log("Failed to establish WebSocket connection:", error);
+                this.wsConnection = null;
             } finally {
                 this.isWsConnecting = false;
-                this.wsInitializationPromise = null; // Clear the promise tracker
-                this.updateStatusBarText(); // Update status bar regardless of outcome
+                this.wsInitializationPromise = null; 
+                this.updateStatusBarText();
             }
         })();
 
@@ -150,7 +148,7 @@ class EventListener implements EventHandler, SettingsObserver {
     }
 
     private handleWebSocketError(error: any): void {
-        console.error("WebSocket error:", error);
+        console.log("WebSocket error:", error);
         if (!this.isWsConnecting) {
             this.wsConnection?.close();
             this.wsConnection = null;
@@ -313,7 +311,7 @@ class EventListener implements EventHandler, SettingsObserver {
             !this.isWsConnecting
         ) {
             this.initializeWebSocket().catch((err) => {
-                console.error("Background WebSocket connection failed:", err);
+                console.log("Background WebSocket connection failed:", err);
             });
         }
         await this.state.handleDocumentChange(documentChanges);

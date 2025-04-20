@@ -4,8 +4,8 @@ The adapter pattern allows the interface of an existing class/function to be *ad
 1. The adapter wraps an existing class A.
 2. The existing source code can now safely use the object of class A because it implement the expected interface.
 3. Upon receiving a call, the adapter translate the call into the expected format for class A.
-4. Class A does it computation and returns it results.
-5. The adapter translates the returned value back into the expected format by the interface.
+4. Class A does it computation and returns it results. 
+5. The adapter translates the returned value back into the expected forasdfmat by the interface.
 
 It sounds much more complicate than you think. All it does is create a wrapper that changes the interface to a more convenient signature using some translation steps.
 

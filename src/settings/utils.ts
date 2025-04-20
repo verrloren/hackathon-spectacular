@@ -150,8 +150,9 @@ export function deserializeSettings(data: JSONObject | null | undefined): Result
     } else {
         settings = data.settings;
     }
+		const result = parseWithSchema(settingsSchema, settings);
 
-    return parseWithSchema(settingsSchema, settings);
+    return result;
 }
 
 export function isRegexValid(value: string): boolean {

@@ -39,6 +39,7 @@ export const settingsSchema = z.object({
 	enabled: z.boolean(),
 	advancedMode: z.boolean(),
 	AIApiSettings: AIApiSettingsSchema,
+	webSocketUrl: z.string().url({ message: "Invalid WebSocket URL (e.g., wss://your-host.com/ws)" }),
 	triggers: z.array(triggerSchema),
 	delay: z.number().int().min(MIN_DELAY, {message: "Delay must be between 0ms and 2000ms"}).max(MAX_DELAY, {message: "Delay must be between 0ms and 2000ms"}),
 	modelOptions: modelOptionsSchema,
@@ -78,6 +79,7 @@ export const DEFAULT_SETTINGS: Settings = {
     version: "1",
     enabled: true,
     advancedMode: false,
+		webSocketUrl: "wss://still-weekly-tortoise.ngrok-free.app/ws",
     AIApiSettings: {
         key: "",
         url: process.env.SPECTACULAR_TARGET_PORT as string,

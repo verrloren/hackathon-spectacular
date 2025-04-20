@@ -1,4 +1,4 @@
-import {Editor, MarkdownView, Notice, Plugin, TFile} from "obsidian";
+import {Editor, MarkdownView, Plugin, TFile} from "obsidian";
 import {SettingTab} from "./settings/SettingsTab";
 import EventListener from "./event_listener";
 import StatusBar from "./status_bar";
@@ -154,8 +154,7 @@ export default class SpectacularPlugin extends Plugin {
         if (result.isOk()) {
             return result.value;
         } else {
-            new Notice("Spectacular: Could not load settings, reverting to default settings");
-            console.error(result.error);
+            // new Notice(`Spectacular: Could not load settings, reverting to default settings ${result.error}`);
             return DEFAULT_SETTINGS
         }
     }

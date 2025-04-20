@@ -1,171 +1,210 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { default as NodeWebSocket } from 'ws';
-import { Connection, Session, UserContext, WsClientRequest, WsServerResponse } from './types';
+import {
+    Connection,
+    Session,
+    UserContext,
+    WsClientRequest,
+    WsServerResponse,
+} from "./types";
+import { v4 as uuidv4 } from "uuid";
 
-type OpenHandler = (event: NodeWebSocket.Event) => void;
-type CloseHandler = (event: NodeWebSocket.CloseEvent) => void;
-type ErrorHandler = (event: NodeWebSocket.ErrorEvent) => void;
+type OpenHandler = (event: Event) => void;
+type CloseHandler = (event: CloseEvent) => void;
+type ErrorHandler = (event: ErrorEvent) => void;
 
 class WebSocket implements Connection {
     userContext: UserContext = {};
-		private _session: Session | null = null;
+    private _session: Session | null = null;
 
-    private _ws: NodeWebSocket;
+    private _ws: globalThis.WebSocket;
     private _idleTimer: undefined | ReturnType<typeof setTimeout>;
     private _idleTimeoutMillis?: number;
-		private _pendingRequests: Map<string, { resolve: (value: WsServerResponse) => void; reject: (reason?: any) => void }> = new Map();
+    private _pendingRequests: Map<
+        string,
+        {
+            resolve: (value: WsServerResponse) => void;
+            reject: (reason?: any) => void;
+        }
+    > = new Map();
+
+    private _openHandler: OpenHandler | null;
+    private _closeHandler: CloseHandler | null;
+    private _errorHandler: ErrorHandler | null;
 
     constructor(
-        host: string,
-        port: number | undefined,
+        hostUrl: string,
         openHandler: OpenHandler | null,
         closeHandler: CloseHandler | null,
         errorHandler: ErrorHandler | null,
         idleTimeoutMillis?: number
     ) {
-        const url = new URL(host);
-        if (port !== undefined) {
-            url.port = port.toString();
+        try {
+            new URL(hostUrl);
+        } catch (e) {
+            throw new Error(`Invalid WebSocket URL provided: ${hostUrl}`);
         }
-        this._ws = new NodeWebSocket(url);
 
-        this._ws.onopen = (event: NodeWebSocket.Event) => {
-					console.log("Internal: WebSocket opened");
-            this.resetIdleTimer();
-            openHandler && openHandler(event);
-        };
-        this._ws.onclose = this.wrapCloseHandler(closeHandler);
-        this._ws.onerror = this.wrapErrorHandler(errorHandler);
+        this._ws = new globalThis.WebSocket(hostUrl);
 
-        this._ws.onmessage = this.onmessage.bind(this);
         this._idleTimeoutMillis = idleTimeoutMillis;
+
+        this._openHandler = openHandler;
+        this._closeHandler = closeHandler;
+        this._errorHandler = errorHandler;
+
+        this._ws.onopen = (event: Event) => {
+            console.log("Native WebSocket opened");
+            this.resetIdleTimer();
+            if (this._openHandler) {
+                this._openHandler(event);
+            }
+        };
+
+        this._ws.onmessage = (event: MessageEvent) => {
+            this.onmessage(event);
+        };
+
+        this._ws.onclose = this.wrapCloseHandler(this._closeHandler);
+        this._ws.onerror = this.wrapErrorHandler(this._errorHandler);
     }
 
     setCloseHandler(fn: CloseHandler | null): void {
+        this._closeHandler = fn;
         this._ws.onclose = this.wrapCloseHandler(fn);
     }
 
     setErrorHandler(fn: ErrorHandler | null): void {
-        this._ws.onerror = fn
-            ? (event: NodeWebSocket.ErrorEvent) => {
-                  fn(event.error);
-              }
-            : null;
+        this._errorHandler = fn;
+        this._ws.onerror = this.wrapErrorHandler(fn);
     }
 
-		getSession(): Session | null {
-			return this._session;
-	}
+    getSession(): Session | null {
+        return this._session;
+    }
 
+    async send(req: WsClientRequest): Promise<WsServerResponse> {
+        if (this._ws.readyState !== globalThis.WebSocket.OPEN) {
+            return Promise.reject(new Error("WebSocket is not open."));
+        }
 
-	async send(req: WsClientRequest): Promise<WsServerResponse> {
-		// Return a promise that resolves when the specific response is received
-		return new Promise((resolve, reject) => {
-				if (this._ws.readyState !== NodeWebSocket.OPEN) {
-						return reject(new Error("WebSocket is not open."));
-				}
+        this.resetIdleTimer();
+        const id = req.id || uuidv4();
+        const messageToSend = { ...req, id };
 
-				try {
-						const message = JSON.stringify(req);
-						this._pendingRequests.set(req.id, { resolve, reject });
-						this._ws.send(message, (err) => {
-								if (err) {
-										// Handle send error immediately
-										this._pendingRequests.delete(req.id);
-										reject(err);
-								} else {
-										this.resetIdleTimer();
-								}
-						});
-				} catch (error) {
-						this._pendingRequests.delete(req.id); // Clean up if stringify fails
-						reject(error);
-				}
-		});
-}
+        return new Promise((resolve, reject) => {
+            this._pendingRequests.set(id, { resolve, reject });
+            try {
+                this._ws.send(JSON.stringify(messageToSend));
+								console.log(`WebSocket message sent: ${JSON.stringify(messageToSend)}`);
+            } catch (error) {
+                this._pendingRequests.delete(id);
+                reject(error);
+            }
+            setTimeout(() => {
+                if (this._pendingRequests.has(id)) {
+                    this._pendingRequests.delete(id);
+                    reject(new Error(`Request ${id} timed out`));
+                }
+            }, 30000); // 30sec
+        });
+    }
 
     close(): void {
-			if (this._ws.readyState === NodeWebSocket.OPEN || this._ws.readyState === NodeWebSocket.CONNECTING) {
-					this._ws.close();
-			}
-			this.clearIdleTimer(); 
-			this.rejectPendingRequests(new Error("WebSocket closed explicitly."));
-	}
+        this.clearIdleTimer();
+        if (this._ws && this._ws.readyState !== globalThis.WebSocket.CLOSED) {
+            this._ws.close(1000, "Client initiated close");
+						console.log("WebSocket closed by client.");
+        }
+        this.rejectPendingRequests("WebSocket closed by client.");
+    }
 
-    private onmessage(event: NodeWebSocket.MessageEvent) {
-			this.resetIdleTimer(); // Reset idle timer on any message
+    private onmessage(event: MessageEvent) {
+			this.resetIdleTimer();
 			try {
-					const messageString = event.data.toString();
-					if (messageString === 'o') {
-							console.log("Received server open confirmation ('o')");
-							return; // Don't process 'o' as JSON
-					}
-					if (messageString === 'h') {
-							return; // Don't process 'h' as JSON
+					const data = JSON.parse(event.data as string) as WsServerResponse; // Assuming JSON messages
+
+					if (data.event === 'sessionInfo' && 'session' in data && data.session) {
+						this._session = data.session;
+						this.userContext.userId = data.session.sid; // Or however userId is determined
+						console.log("Session received:", this._session);
 					}
 
-					const response = JSON.parse(messageString) as WsServerResponse | { event: string, session: Session }; // Type assertion
 
-					if ('event' in response && response.event === 'sessionInfo' && response.session) {
-							this._session = response.session as Session;
-							console.log("Client received session:", this._session);
-					} else if ('id' in response && this._pendingRequests.has(response.id)) {
-							// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-							const { resolve } = this._pendingRequests.get(response.id)!;
-							resolve(response as WsServerResponse); 
-							this._pendingRequests.delete(response.id); 
+					const pending = this._pendingRequests.get(data.id);
+					if (pending) {
+							if (data.errorCode && data.errorCode !== 0) {
+								pending.reject(new Error(data.errorMessage || `Server error code: ${data.errorCode}`));
+							} else {
+								pending.resolve(data);
+								console.log(`WebSocket message resolved: ${JSON.stringify(data)}`);
+							}
+							this._pendingRequests.delete(data.id);
 					} else {
-							console.warn("Received unexpected message or message without matching request ID:", response);
+						console.log("Received message with no matching pending request:", data);
 					}
-			} catch (e) {
-					console.error("Failed to parse server message or handle response:", e, "Raw data:", event.data.toString());
+			} catch (error) {
+					console.error("Failed to parse WebSocket message or handle response:", error);
 			}
-	}
+		}
 
     private resetIdleTimer() {
-			if (this._idleTimeoutMillis === undefined) {
-					return;
-			}
-			this.clearIdleTimer(); 
+			if (!this._idleTimeoutMillis) return;
+			this.clearIdleTimer();
 			this._idleTimer = setTimeout(() => {
-					console.log("WebSocket idle timeout reached. Closing connection.");
+					console.log(`WebSocket idle timeout reached (${this._idleTimeoutMillis}ms). Closing.`);
 					this.close();
 			}, this._idleTimeoutMillis);
 	}
 
-    private rejectHandlers() {
-        // TODO: reject if already closed
+    private clearIdleTimer() {
+        if (this._idleTimer) {
+            clearTimeout(this._idleTimer);
+            this._idleTimer = undefined;
+        }
     }
 
-		private clearIdleTimer() {
-			if (this._idleTimer) {
-					clearTimeout(this._idleTimer);
-					this._idleTimer = undefined;
-			}
+    private rejectPendingRequests(reason: any) {
+			this._pendingRequests.forEach((request) => {
+					request.reject(reason);
+			});
+			this._pendingRequests.clear();
 	}
 
-	private rejectPendingRequests(reason: any) {
-		this._pendingRequests.forEach(({ reject }) => reject(reason));
-		this._pendingRequests.clear();
+	private wrapCloseHandler(
+		fn: CloseHandler | null
+): (event: CloseEvent) => void {
+		return (event: CloseEvent) => {
+				console.log(`Native WebSocket closed: Code=${event.code}, Reason=${event.reason}, WasClean=${event.wasClean}`);
+				this.clearIdleTimer();
+				this.rejectPendingRequests(`WebSocket closed: ${event.code}`);
+				this._session = null;
+				if (fn) {
+						fn(event);
+				}
+		};
 }
 
-private wrapCloseHandler(fn: CloseHandler | null): (event: NodeWebSocket.CloseEvent) => void {
-	return (event: NodeWebSocket.CloseEvent) => {
-			console.log(`Internal: WebSocket closed (${event.code})`);
-			this.clearIdleTimer(); 
-			this.rejectPendingRequests(new Error(`WebSocket closed with code ${event.code}.`)); // Reject pending
-			fn && fn(event); 
-	};
-}
+private wrapErrorHandler(
+	fn: ErrorHandler | null
+): (event: Event) => void {
+	return (event: Event) => {
+		let errorDetails = "Unknown WebSocket error";
+		if (event instanceof ErrorEvent) {
+			errorDetails = `Native WebSocket error: ${event.message} (col: ${event.colno}, line: ${event.lineno}, file: ${event.filename})`;
+			console.error(errorDetails, event.error);
+		} else {
+			console.error("Native WebSocket error (generic Event):", event);
+		}
 
-		private wrapErrorHandler(fn: ErrorHandler | null): (event: NodeWebSocket.ErrorEvent) => void {
-			return (event: NodeWebSocket.ErrorEvent) => {
-					console.error("Internal: WebSocket error:", event.error);
-					this.clearIdleTimer(); 
-					this.rejectPendingRequests(event.error);
-					fn && fn(event.error);
-			};
-	}
+		this.clearIdleTimer();
+		this.rejectPendingRequests(`WebSocket error occurred: ${errorDetails}`);
+		if (fn && event instanceof ErrorEvent) { 
+				fn(event);
+		} else if (fn) {
+				console.warn("ErrorHandler called with a non-ErrorEvent:", event);
+		}
+};
+}
 }
 
 export default WebSocket;
