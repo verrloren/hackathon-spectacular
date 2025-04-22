@@ -1,9 +1,9 @@
 import State from "./state";
 import { DocumentChanges } from "../render_plugin/document_changes_listener";
 import EventListener from "../event_listener";
-import Context from "../context_detection";
 import { v4 as uuidv4 } from "uuid";
 import { Connection, Session, WsPredictRequest, WsServerResponse } from "src/websocket/types";
+import { updateSuggestion } from "src/render_plugin/states";
 
 class PredictingState extends State {
     private predictionPromise: Promise<void> | null = null;
@@ -12,22 +12,31 @@ class PredictingState extends State {
     private readonly suffix: string;
 		private currentRequestId: string | null = null;
 
+		
+
     constructor(context: EventListener, prefix: string, suffix: string) {
         super(context);
         this.prefix = prefix;
         this.suffix = suffix;
     }
 
-    static createAndStartPredicting(
-        context: EventListener,
-        prefix: string,
-        suffix: string
-    ): PredictingState {
-        const predictingState = new PredictingState(context, prefix, suffix);
-        predictingState.startPredicting();
-        context.setContext(Context.getContext(prefix, suffix));
-        return predictingState;
-    }
+    public static createAndStartPredicting(
+			context: EventListener,
+			prefix: string,
+			suffix: string
+	): PredictingState {
+			const newState = new PredictingState(context, prefix, suffix);
+
+			if (context.view) {
+					console.log("[PredictingState] Displaying loading indicator '...'");
+					updateSuggestion(context.view, "...");
+			} else {
+					console.warn("[PredictingState] Cannot display loading indicator, view is null.");
+			}
+
+			newState.startPredicting();
+			return newState;
+	}
 
 
     handleCancelKeyPressed(): boolean {

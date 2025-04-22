@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import StatusBar from "./status_bar";
-import { DocumentChanges } from "./render_plugin/document_changes_listener";
+import { DocumentChanges, getPrefix, getSuffix } from "./render_plugin/document_changes_listener";
 import {
     cancelSuggestion,
     insertSuggestion,
@@ -32,7 +32,7 @@ const FIVE_MINUTES_IN_MS = 1000 * 60 * 5;
 const MAX_N_ITEMS_IN_CACHE = 5000;
 
 class EventListener implements EventHandler, SettingsObserver {
-    private view: EditorView | null = null;
+    public view: EditorView | null = null;
 
     private state: EventHandler = new InitState();
     private statusBar: StatusBar;
@@ -453,9 +453,16 @@ class EventListener implements EventHandler, SettingsObserver {
     }
 
     handleAcceptKeyPressed(): boolean {
-        return this.state.handleAcceptKeyPressed();
-    }
-
+			const handled = this.state.handleAcceptKeyPressed();
+			if (handled && this.view && this.settings.enabled && !this.isDisabled()) {
+					const currentState = this.view.state;
+					const newPrefix = getPrefix(currentState);
+					const newSuffix = getSuffix(currentState);
+					console.log("[EventListener] Suggestion accepted. Triggering new prediction.");
+					this.transitionToPredictingState(newPrefix, newSuffix);
+			}
+			return handled;
+	}
     handlePartialAcceptKeyPressed(): boolean {
         return this.state.handlePartialAcceptKeyPressed();
     }
