@@ -1,4 +1,4 @@
-import { Connection, ConnectionFactory, ResponseWithContext, Session, UserContext, WsPredictRequest } from 'src/websocket/types';
+import { Connection, ConnectionFactory, HubSendRequestResponse, Session, WsPredictRequest, WsServerResponse } from 'src/websocket/types';
 import WebSocketConnectionFactory from 'src/websocket/factory';
 
 const idleTimeoutMillis =
@@ -11,6 +11,7 @@ const targetHostUrl = process.env.SPECTACULAR_TARGET_HOST;
 if (!targetHostUrl) {
 	throw new Error("SPECTACULAR_TARGET_HOST environment variable is not defined. Hub cannot connect to the backend.");
 }
+
 
 export class Hub {
     private connectionFactory: ConnectionFactory;
@@ -25,22 +26,21 @@ export class Hub {
         this.connections = new Map<string, Promise<Connection>>();
     }
 
-    async sendRequest(session: Session, request: WsPredictRequest): Promise<ResponseWithContext> {
+    async sendRequest(session: Session, request: WsPredictRequest): Promise<HubSendRequestResponse> {
         if (!session) {
             throw new Error('unauthorized request');
         }
 				
 
         const connection = await this.getConnection(session);
-        const response = await connection.send(request);
+        const response: WsServerResponse = await connection.send(request);
 
-        if (response) {
-            throw new Error(`Server error: ${response.errorCode}`);
-        }
+				if (response.errorCode && response.errorCode !== 0) {
+					throw new Error(`Server error (Code: ${response.errorCode}): ${response.errorMessage || 'Unknown error'}`);
+				}
 
         return {
             serverResponse: response,
-            userContext: connection.userContext
         };
     }
 
@@ -52,16 +52,16 @@ export class Hub {
         return this.createConnection(session);
     }
 
-    async getUser(session: Session): Promise<UserContext | null> {
-        return this.getConnection(session)
-            .then((connection) => connection.userContext)
-            .catch(() => null);
-    }
-
     async terminateConnection(session: Session) {
         const connection = this.connections.get(session.sid);
         if (connection) {
-            (await connection).close();
+					try {
+						(await connection).close();
+					} catch (error) {
+					console.error(`Error closing connection for session ${session.sid}:`, error);
+					} finally {
+					this.connections.delete(session.sid);
+					}
         }
     }
 
@@ -73,12 +73,13 @@ export class Hub {
 
     private async internalCreateConnection(session: Session): Promise<Connection> {
         const closeHandler = () => this.connections.delete(session.sid);
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        const connection = await this.connectionFactory.createConnection(targetHostUrl!, closeHandler, Number(idleTimeoutMillis));
-
-				connection.userContext.userId = session.sid;
+				if(!targetHostUrl) throw new Error("SPECTACULAR_TARGET_HOST environment variable is not defined. Hub cannot connect to the backend.");
+        const connection = await this.connectionFactory.createConnection(
+					targetHostUrl, 
+					closeHandler, 
+					Number(idleTimeoutMillis)
+				);
         console.log(`Hub: Connection established for session ${session.sid}. User context set.`);
-
         return connection;
     }
 }

@@ -9,9 +9,8 @@ export interface Response {
 	errorCode: number;
 }
 
-export type ResponseWithContext = {
-    serverResponse: Response;
-    userContext: UserContext;
+export type HubSendRequestResponse = {
+    serverResponse: WsServerResponse;
 };
 
 export interface WsBase {
@@ -20,12 +19,14 @@ export interface WsBase {
 }
 
 export interface WsPredictRequest extends WsBase {
+	session: Session;
 	event: 'predict';
 	prefix: string;
 	suffix: string;
 }
 
 export interface WsPredictResponse extends WsBase {
+	session: Session;
 	event: 'predictResponse'; 
 	prediction?: string;
 	errorCode: number;
@@ -44,7 +45,6 @@ export type WsClientRequest = WsPredictRequest
 export type WsServerResponse = WsPredictResponse | WsSessionInfoResponse;
 
 export interface Connection {
-    userContext: UserContext;
 		getSession(): Session | null;
     setCloseHandler(fn: ((event: any) => void) | null): void;
     setErrorHandler(fn: ((error: any) => void) | null): void;
@@ -60,16 +60,13 @@ export interface ConnectionFactory {
     ): Promise<Connection>;
 }
 
-export interface UserContext {
-	userId?: string;
-}
 
 export interface Session {
 	sid: string;
 }
 
 export interface IConnectionService {
-	sendRequest(session: Session, request: WsClientRequest): Promise<ResponseWithContext>;
+	sendRequest(session: Session, request: WsClientRequest): Promise<HubSendRequestResponse>;
 	getConnection(session: Session): Promise<Connection>;
 	terminateConnection(session: Session): void;
 }

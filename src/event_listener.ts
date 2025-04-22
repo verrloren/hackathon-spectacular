@@ -26,6 +26,7 @@ import PredictingState from "./states/predicting_state";
 import { App, TFile } from "obsidian";
 import { Connection, ConnectionFactory, Session } from "./websocket/types";
 import WebSocketConnectionFactory from "./websocket/factory";
+import { v4 as uuidv4 } from "uuid";
 
 const FIVE_MINUTES_IN_MS = 1000 * 60 * 5;
 const MAX_N_ITEMS_IN_CACHE = 5000;
@@ -44,6 +45,7 @@ class EventListener implements EventHandler, SettingsObserver {
         ttl: FIVE_MINUTES_IN_MS,
     });
 
+    public session: Session | null = null;
     public wsConnection: Connection | null = null;
     private wsConnectionFactory: ConnectionFactory;
     private isWsConnecting: boolean;
@@ -75,77 +77,175 @@ class EventListener implements EventHandler, SettingsObserver {
         this.wsConnectionFactory = new WebSocketConnectionFactory();
     }
 
+    public createSession(): Session {
+        this.session = { sid: uuidv4().substring(0, 8) };
+        console.log(`[EventListener] Created and stored client-side session: ${this.session.sid}`);
+        return this.session;
+    }
+
+    public getSession(): Session | null {
+        return this.session;
+    }
+
+    private clearSession(): void {
+        console.log(`[EventListener] Clearing client-side session: ${this.session?.sid ?? "none"}`);
+        this.session = null;
+    }
+
     private async initializeWebSocket(): Promise<void> {
         if (this.isWsConnecting) {
-            await this.wsInitializationPromise;
-            return;
+          console.log("WebSocket initialization already in progress. Awaiting...");
+          await (this.wsInitializationPromise ?? Promise.resolve());
+          return;
         }
-				if (this.wsConnection) {
-					if (!this.wsConnection.getSession()) {
-						console.warn("WebSocket connection exists but session is missing. Re-initializing.");
-					} else {
-						return;
-					}
-			}
+        if (this.wsConnection && this.session) {
+          console.log("WebSocket already connected with session.");
+          return;
+        }
+        if (this.wsConnection && this.session) {
+            console.warn("WebSocket connection exists but session is missing. Closing and re-initializing.");
+            await this.closeWebSocketConnection();
+        }
         if (!this.settings.enabled) {
             console.log("Plugin disabled, skipping WebSocket connection.");
             return;
         }
-
-				if (!this.settings.webSocketUrl) {
-					console.log("WebSocket URL is not configured in settings. Skipping connection.");
-					this.transitionToDisabledInvalidSettingsState();
-					return;
-			}
+        if (!this.settings.webSocketUrl) {
+            console.log(`WebSocket URL not configured in settings ${this.settings.webSocketUrl}`);
+            if (!(this.state instanceof DisabledInvalidSettingsState))
+                this.transitionToDisabledInvalidSettingsState();
+            return;
+        }
 
         this.isWsConnecting = true;
         this.updateStatusBarText();
-        console.log("Initializing WebSocket connection to:", this.settings.webSocketUrl);
+        console.log("Starting WebSocket initialization process...");
 
-        this.wsInitializationPromise = (async () => {
-            try {
-                this.wsConnection =
-                    await this.wsConnectionFactory.createConnection(
-											this.settings.webSocketUrl,
-                      () => this.handleWebSocketClose(), 
-                      this.settings.wsDebounceMillis
+        this.wsInitializationPromise = new Promise((resolve, reject) => {
+            (async () => {
+                let connectionAttempt: Connection | null = null;
+                try {
+                    console.log(
+                        "Attempting to create WebSocket connection to:",
+                        this.settings.webSocketUrl
                     );
-								
 
-                console.log(`WebSocket connected. Session: ${this.wsConnection.getSession()}`);
+                    connectionAttempt =
+                      await this.wsConnectionFactory.createConnection(
+                        this.settings.webSocketUrl,
+                        this.handleWebSocketClose.bind(this),
+                        this.settings.wsDebounceMillis
+                      );
+										this.wsConnection = connectionAttempt
+                    console.log("WebSocket connection opened. Now waiting for session...");
 
-                this.wsConnection.setErrorHandler((error) =>
-                    this.handleWebSocketError(error)
-                );
+                    const createdSession = this.createSession();
+                    console.log(`Client session ${createdSession} created. Assigning connection.`);
+                    if (this.wsConnection) {
+                        this.wsConnection.setErrorHandler((error) =>
+                            this.handleWebSocketError(error)
+                        );
+                    }
+                    console.log("WebSocket fully initialized (connected + session received).");
+                    if (
+                        (this.state instanceof InitState ||
+                        this.state instanceof DisabledInvalidSettingsState ||
+                        this.state instanceof DisabledManualState ||
+                        this.state instanceof DisabledFileSpecificState) &&
+                        this.settings.enabled &&
+                        checkForErrors(this.settings).size === 0
+                    ) {
+                        console.log("Transitioning to IdleState after successful initialization.");
+                        this.transitionToIdleState();
+                    }
+                    resolve();
+                } catch (error) {
+                    console.error("WebSocket initialization failed:", error);
+                    if (connectionAttempt && !this.wsConnection) {
+                        console.log("Closing failed connection attempt.");
+                        connectionAttempt.close();
+                    }
+                    this.wsConnection = null;
+                    this.clearSession();
 
-                if (
-                    this.state instanceof InitState &&
-                    this.settings.enabled &&
-                    checkForErrors(this.settings).size === 0
-                ) {
-                    this.transitionToIdleState();
+                    if (!(this.state instanceof DisabledInvalidSettingsState)) {
+                        this.transitionToDisabledInvalidSettingsState();
+                    }
+                    reject(error);
+                } finally {
+                    this.isWsConnecting = false;
+                    this.updateStatusBarText();
+                    console.log(
+                        "WebSocket initialization process finished (success or failure)."
+                    );
                 }
-            } catch (error) {
-                console.log("Failed to establish WebSocket connection:", error);
-                this.wsConnection = null;
-            } finally {
-                this.isWsConnecting = false;
-                this.wsInitializationPromise = null; 
-                this.updateStatusBarText();
-            }
-        })();
+            })();
+        });
 
-        await this.wsInitializationPromise;
+        try {
+          await this.wsInitializationPromise;
+        } catch (initError) {
+          console.log("Caught initialization error at top level of initializeWebSocket.");
+        } finally {
+          this.wsInitializationPromise = null;
+        }
+    }
+
+    private async closeWebSocketConnection(): Promise<void> {
+        if (this.wsConnection) {
+            console.log("Closing WebSocket connection...");
+            this.wsConnection.setErrorHandler(null);
+            this.wsConnection.setCloseHandler(null);
+            this.wsConnection.close();
+            this.wsConnection = null;
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            console.log("WebSocket connection closed.");
+        } else {
+            this.clearSession();
+        }
+        if (
+            !(
+                this.state instanceof DisabledManualState ||
+                this.state instanceof DisabledFileSpecificState
+            )
+        ) {
+            const settingErrors = checkForErrors(this.settings);
+            if (!this.settings.enabled) {
+                this.transitionToDisabledManualState();
+            } else if (settingErrors.size > 0 || !this.settings.webSocketUrl) {
+                this.transitionToDisabledInvalidSettingsState();
+            } else {
+                this.transitionToIdleState();
+            }
+        }
+        this.updateStatusBarText();
     }
 
     private handleWebSocketClose(): void {
-        console.log("WebSocket connection closed.");
-        if (!this.isWsConnecting) {
-            this.wsConnection = null;
-            this.wsInitializationPromise = null;
-            this.updateStatusBarText();
+        console.log("WebSocket connection closed (handleWebSocketClose triggered).");
+        this.wsConnection = null;
+				this.clearSession();
+         if (
+            !(
+                this.state instanceof DisabledManualState ||
+                this.state instanceof DisabledFileSpecificState
+            )
+        ) {
+            console.log("[EventListener] Connection closed, transitioning state.");
+            const settingErrors = checkForErrors(this.settings);
+            if (!this.settings.enabled) {
+              this.transitionToDisabledManualState();
+            } else if (settingErrors.size > 0 || !this.settings.webSocketUrl) {
+              this.transitionToDisabledInvalidSettingsState();
+            } else {
+              this.transitionToIdleState();
+            }
+        } else {
+					console.log("[EventListener] Connection closed, but plugin was manually/file disabled. No state transition needed here.");
         }
+        this.updateStatusBarText();
     }
+
 
     private handleWebSocketError(error: any): void {
         console.log("WebSocket error:", error);
@@ -155,19 +255,22 @@ class EventListener implements EventHandler, SettingsObserver {
             this.wsInitializationPromise = null;
             this.updateStatusBarText();
         }
+				if (this.wsConnection) {
+					this.wsConnection.setErrorHandler(null);
+					this.wsConnection.setCloseHandler(null);
+				}
+				this.wsConnection = null;
+				this.clearSession();
+				this.wsInitializationPromise = null;
     }
 
-    public getSession(): Session | null {
-        return this.wsConnection ? this.wsConnection.getSession() : null;
-    }
 
     public setContext(context: Context): void {
-        if (context === this.context) {
-            return;
-        }
+        if (context === this.context) return;
         this.context = context;
         this.updateStatusBarText();
     }
+
 
     public isSuggesting(): boolean {
         return this.state instanceof SuggestingState;
@@ -254,11 +357,12 @@ class EventListener implements EventHandler, SettingsObserver {
     }
 
     transitionToSuggestingState(
-        suggestion: string,
-        prefix: string,
-        suffix: string,
-        addToCache = true
+      suggestion: string,
+      prefix: string,
+      suffix: string,
+      addToCache = true
     ): void {
+			console.log("[EventListener] transitionToSuggestingState called. View:", this.view ? 'Exists' : 'NULL');
         if (this.view === null) {
             return;
         }
@@ -272,6 +376,7 @@ class EventListener implements EventHandler, SettingsObserver {
         this.transitionTo(
             new SuggestingState(this, suggestion, prefix, suffix)
         );
+				console.log("[EventListener] Calling updateSuggestion with:", suggestion);
         updateSuggestion(this.view, suggestion);
     }
 
@@ -305,14 +410,44 @@ class EventListener implements EventHandler, SettingsObserver {
     async handleDocumentChange(
         documentChanges: DocumentChanges
     ): Promise<void> {
+        let needsInit = false;
         if (
-            !this.wsConnection &&
+						(!this.wsConnection || !this.session) &&
+            !this.isWsConnecting &&
             this.settings.enabled &&
-            !this.isWsConnecting
+            this.settings.webSocketUrl &&
+            !(
+                this.state instanceof DisabledManualState ||
+                this.state instanceof DisabledFileSpecificState ||
+								this.state instanceof DisabledInvalidSettingsState
+            )
         ) {
-            this.initializeWebSocket().catch((err) => {
-                console.log("Background WebSocket connection failed:", err);
-            });
+            needsInit = true;
+            console.log("Document change requires WebSocket initialization.");
+        }
+
+        if (needsInit || this.isWsConnecting) {
+            if (this.isWsConnecting) {
+              console.log("Document change occurred while WebSocket is connecting. Awaiting completion...");
+            }
+            try {
+                await this.initializeWebSocket();
+                if (!this.wsConnection || !this.session) {
+                    console.warn(
+                        "Initialization awaited, but connection/session still not ready. Skipping document change handling for this event."
+                    );
+                    return;
+                }
+                console.log(
+                    "Initialization complete, proceeding with document change handling."
+                );
+            } catch (err) {
+                console.error(
+                    "WebSocket initialization failed during document change:",
+                    err
+                );
+                return;
+            }
         }
         await this.state.handleDocumentChange(documentChanges);
     }

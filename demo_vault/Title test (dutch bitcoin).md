@@ -1,6 +1,3 @@
-# 
-Bitcoin is een nieuw soort digitaal geld. Het verschilt van andere soorten digitaal geld, omdat het werkt zonder centrale autoriteit en zonder tussenpartijen zoals banken. In plaats daarvan is het een open en decentraal netwerk, waarbij gebruikers zelf alle touwtjes in handen hebben. Het netwerk is verspreid over de hele wereld en iedereen kan meedoen. 
-  
-Bitcoin werkt vanwege onderliggende technologie anders dan de meeste mensen gewend zijn. Om het helemaal te begrijpen zal je het een tijd moeten bestuderen. Maar, hoeveel mensen begrijpen hoe de techniek achter het internet werkt? Het belangrijkste is dat je het kunt gebruiken: je hoeft geen expert te zijn om bitcoins veilig te bewaren of te versturen.
+ 
 
-Voor wie toch net iets meer wil weten hebben wij onderstaande technische uitleg geschreven. Niet genoeg om jezelf bitcoinexpert te noemen, maar misschien wel om indruk mee te maken in de kroeg.
+比特币是一种新型的数字货币。 它与其他类型的数字货币不同，因为它的运作没有中央机构，也没有银行等中介机构。 相反，它是一个开放且去中心化的网络，由用户控制。 该网络遍布全球，任何人都可以参与。 由于底层技术的原因，比特币的工作原理与大多数人习惯的不同。 要完全理解它，您需要学习一段时间。 但有多少人了解互联网背后的技术是如何运作的？ 最重要的是你可以使用它：你不必成为专家就可以安全地存储或发送比特币。 对于那些想了解更多信息的人，我们在下面编写了技术说明。 虽然不足以称自己为比特币专家，但也许足以在酒吧里留下深刻的印象. 你不必成为专家就可以安全地存储或发送比特币。

@@ -2,7 +2,6 @@
 import {
     Connection,
     Session,
-    UserContext,
     WsClientRequest,
     WsServerResponse,
 } from "./types";
@@ -13,7 +12,6 @@ type CloseHandler = (event: CloseEvent) => void;
 type ErrorHandler = (event: ErrorEvent) => void;
 
 class WebSocket implements Connection {
-    userContext: UserContext = {};
     private _session: Session | null = null;
 
     private _ws: globalThis.WebSocket;
@@ -121,11 +119,10 @@ class WebSocket implements Connection {
     private onmessage(event: MessageEvent) {
 			this.resetIdleTimer();
 			try {
-					const data = JSON.parse(event.data as string) as WsServerResponse; // Assuming JSON messages
+					const data = JSON.parse(event.data as string) as WsServerResponse;
 
 					if (data.event === 'sessionInfo' && 'session' in data && data.session) {
 						this._session = data.session;
-						this.userContext.userId = data.session.sid; // Or however userId is determined
 						console.log("Session received:", this._session);
 					}
 
