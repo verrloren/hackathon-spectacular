@@ -37,11 +37,3 @@ export const modelOptionsSchema = z.object({
     max_tokens: z.number().int()
         .min(MIN_MAX_TOKENS, {message: `max_tokens must be at least than ${MIN_MAX_TOKENS}`}).max(MAX_MAX_TOKENS, {message: `max_tokens must be at most ${MAX_MAX_TOKENS}`}),
 }).strict();
-
-export const fewShotExampleSchema = z.object({
-    context: z.enum(["Text", "Heading", "BlockQuotes", "UnorderedList", "NumberedList", "CodeBlock", "MathBlock", "TaskList"]),
-    input: z.string().min(3, {message: "The Input must be at least 3 characters long"}),
-    answer: z.string().min(3, {message: "The Answer must be at least 3 characters long"}),
-}).strict();
-
-export type FewShotExample = z.infer<typeof fewShotExampleSchema>;
