@@ -23,8 +23,6 @@ abstract class State implements EventHandler {
                 `Spectacular: There are ${settingErrors.size} errors in your settings. The plugin will be disabled until they are fixed.`
             );
             this.context.transitionToDisabledInvalidSettingsState();
-        } else if (this.context.isCurrentFilePathIgnored() || this.context.currentFileContainsIgnoredTag()) {
-            this.context.transitionToDisabledFileSpecificState();
         }
     }
 
@@ -54,9 +52,7 @@ abstract class State implements EventHandler {
     abstract getStatusBarText(): string;
 
     handleFileChange(file: TFile): void {
-        if (this.context.isCurrentFilePathIgnored() || this.context.currentFileContainsIgnoredTag()) {
-            this.context.transitionToDisabledFileSpecificState();
-        } else if (this.context.isDisabled()) {
+        if (this.context.isDisabled()) {
             this.context.transitionToIdleState();
         }
     }

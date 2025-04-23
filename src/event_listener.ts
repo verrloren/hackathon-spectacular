@@ -16,7 +16,6 @@ import { checkForErrors } from "./settings/utils";
 import Context from "./context_detection";
 import { Settings } from "./settings/versions";
 import { SettingsObserver } from "./settings/SettingsTab";
-import { isMatchBetweenPathAndPatterns } from "./utils";
 import DisabledManualState from "./states/disabled_manual_state";
 import DisabledFileSpecificState from "./states/disabled_file_specific_state";
 import { LRUCache } from "lru-cache";
@@ -283,32 +282,6 @@ class EventListener implements EventHandler, SettingsObserver {
     public handleFileChange(file: TFile): void {
         this.currentFile = file;
         this.state.handleFileChange(file);
-    }
-
-    public isCurrentFilePathIgnored(): boolean {
-        if (this.currentFile === null) {
-            return false;
-        }
-        const patterns = this.settings.ignoredFilePatterns.split("\n");
-        return isMatchBetweenPathAndPatterns(this.currentFile.path, patterns);
-    }
-
-    public currentFileContainsIgnoredTag(): boolean {
-        if (this.currentFile === null) {
-            return false;
-        }
-
-        const ignoredTags = this.settings.ignoredTags.toLowerCase().split("\n");
-
-        const metadata = this.app.metadataCache.getFileCache(this.currentFile);
-        if (!metadata || !metadata.tags) {
-            return false;
-        }
-
-        const tags = metadata.tags.map((tag) =>
-            tag.tag.replace(/#/g, "").toLowerCase()
-        );
-        return tags.some((tag) => ignoredTags.includes(tag));
     }
 
     insertCurrentSuggestion(suggestion: string): void {

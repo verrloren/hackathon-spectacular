@@ -35,13 +35,6 @@ class IdleState extends State {
             return;
         }
 
-				if (
-					this.context.isCurrentFilePathIgnored() ||
-					this.context.currentFileContainsIgnoredTag()
-			) {
-					return;
-			}
-
         if (this.context.containsTriggerCharacters(documentChanges)) {
            this.context.transitionToQueuedState(prefix, suffix);
         }

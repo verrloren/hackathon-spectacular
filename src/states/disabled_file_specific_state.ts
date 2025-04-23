@@ -12,16 +12,9 @@ class DisabledFileSpecificState extends State {
         if (!this.context.settings.enabled) {
             this.context.transitionToDisabledManualState();
         }
-        if (!this.context.isCurrentFilePathIgnored() || !this.context.currentFileContainsIgnoredTag()) {
-            this.context.transitionToIdleState();
-        }
     }
 
     handleFileChange(file: TFile): void {
-        if (this.context.isCurrentFilePathIgnored() || this.context.currentFileContainsIgnoredTag()) {
-            return;
-        }
-
         if (this.context.settings.enabled) {
             this.context.transitionToIdleState();
         } else {

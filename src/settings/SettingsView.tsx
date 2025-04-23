@@ -7,22 +7,20 @@ import SliderSettingsItem from "./components/SliderSettingsItem";
 import TriggerSettings from "./components/TriggerSettings";
 import CheckBoxSettingItem from "./components/CheckBoxSettingItem";
 import {
-    MAX_DELAY,
-    MAX_MAX_CHAR_LIMIT,
-    MIN_DELAY,
-    MIN_MAX_CHAR_LIMIT,
     Settings
 } from "./versions"
+import { MAX_DELAY, MAX_MAX_CHAR_LIMIT, MIN_DELAY, MIN_MAX_CHAR_LIMIT } from "./versions/v1/v1";
 
 interface IProps {
-    onSettingsChanged(settings: Settings): void;
-
-    settings: Settings;
+  onSettingsChanged(settings: Settings): void;
+  settings: Settings;
+	availableFolders: string[];
 }
 
 export default function SettingsView(props: IProps): React.JSX.Element {
     const [settings, _setSettings] = useState<Settings>(props.settings);
     const errors = checkForErrors(settings);
+		const folderSelectRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
         _setSettings(props.settings);
@@ -43,7 +41,7 @@ export default function SettingsView(props: IProps): React.JSX.Element {
 
 						<h2>Select folder</h2>
 						{/* selecting folder from all folders dropdown */}
-						
+
             <h2 >General</h2>
             <CheckBoxSettingItem
                 name={"Enable"}

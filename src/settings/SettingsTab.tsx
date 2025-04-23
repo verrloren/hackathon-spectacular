@@ -1,4 +1,4 @@
-import {Plugin, PluginSettingTab} from "obsidian";
+import {Plugin, PluginSettingTab, TFolder} from "obsidian";
 import {createRoot, Root} from "react-dom/client";
 import SettingsView from "./SettingsView";
 import * as React from "react";
@@ -58,17 +58,24 @@ export class SettingTab extends PluginSettingTab {
     }
 
     display(): void {
-        this.root = createRoot(this.containerEl);
+			this.containerEl.empty();
+      this.root = createRoot(this.containerEl);
 
-        this.root.render(
-            <React.StrictMode>
-                <SettingsView
-                    onSettingsChanged={async (settings) => {
-                        this.updatedSettings = settings;
-                    }}
-                    settings={this.settings}
-                />
-            </React.StrictMode>
+			const vaultFolders = this.app.vault.getAllLoadedFiles()
+			.filter((file): file is TFolder => file instanceof TFolder)
+			.map(folder => folder.path) // Get paths
+			.sort();
+
+      this.root.render(
+      <React.StrictMode>
+          <SettingsView
+              onSettingsChanged={async (settings) => {
+                  this.updatedSettings = settings;
+              }}
+              settings={this.settings}
+							availableFolders={vaultFolders}
+          />
+      </React.StrictMode>
         );
 
     }

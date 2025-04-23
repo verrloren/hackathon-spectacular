@@ -1,14 +1,10 @@
-import {
-    MAX_DELAY,
-    MAX_MAX_CHAR_LIMIT,
-    MIN_DELAY,
-    MIN_MAX_CHAR_LIMIT,
-} from "../shared";
 import {z} from "zod";
-import { modelOptionsSchema, AIApiSettingsSchema} from "../shared";
-import {isRegexValid, isValidIgnorePattern} from "../../utils";
+import {isRegexValid} from "../../utils";
 
-
+export const MIN_DELAY = 0;
+export const MAX_DELAY = 2000;
+export const MIN_MAX_CHAR_LIMIT = 100;
+export const MAX_MAX_CHAR_LIMIT = 10000;
 
 export const triggerSchema = z.object({
     type: z.enum(['string', 'regex']),
@@ -38,39 +34,18 @@ export const settingsSchema = z.object({
 	version: z.literal("1"),
 	enabled: z.boolean(),
 	advancedMode: z.boolean(),
-	AIApiSettings: AIApiSettingsSchema,
 	webSocketUrl: z.string().url({ message: "Invalid WebSocket URL (e.g., wss://your-host.com/ws)" }),
 	triggers: z.array(triggerSchema),
 	delay: z.number().int().min(MIN_DELAY, {message: "Delay must be between 0ms and 2000ms"}).max(MAX_DELAY, {message: "Delay must be between 0ms and 2000ms"}),
-	modelOptions: modelOptionsSchema,
-	// systemMessage: z.string().min(3, {message: "System message must be at least 3 characters long"}), // Removed
-	// fewShotExamples: z.array(fewShotExampleSchema), // Removed
 	userMessageTemplate: z.string().min(3, {message: "User message template must be at least 3 characters long"}),
 	chainOfThoughRemovalRegex: z.string().refine((regex) => isRegexValid(regex), {message: "Invalid regex"}),
 	dontIncludeDataviews: z.boolean(),
 	maxPrefixCharLimit: z.number().int().min(MIN_MAX_CHAR_LIMIT, {message: `Max prefix char limit must be at least ${MIN_MAX_CHAR_LIMIT}`}).max(MAX_MAX_CHAR_LIMIT, {message: `Max prefix char limit must be at most ${MAX_MAX_CHAR_LIMIT}`}),
 	maxSuffixCharLimit: z.number().int().min(MIN_MAX_CHAR_LIMIT, {message: `Max prefix char limit must be at least ${MIN_MAX_CHAR_LIMIT}`}).max(MAX_MAX_CHAR_LIMIT, {message: `Max prefix char limit must be at most ${MAX_MAX_CHAR_LIMIT}`}),
-	removeDuplicateMathBlockIndicator: z.boolean(),
-	removeDuplicateCodeBlockIndicator: z.boolean(),
-	ignoredFilePatterns: z.string().refine((value) => value
-			.split("\n")
-			.filter(s => s.trim().length > 0)
-			.filter(s => !isValidIgnorePattern(s)).length === 0,
-			{message: "Invalid ignore pattern"}
-	),
-	ignoredTags: z.string().refine((value) => value
-			.split("\n")
-			.filter(s => s.includes(" ")).length === 0, {message: "Tags cannot contain spaces"}
-	).refine((value) => value
-			.split("\n")
-			.filter(s => s.includes("#")).length === 0, {message: "Enter tags without the # symbol"}
-	).refine((value) => value
-			.split("\n")
-			.filter(s => s.includes(",")).length === 0, {message: "Enter each tag on a new line without commas"}
-	),
 	cacheSuggestions: z.boolean(),
 	debugMode: z.boolean(),
-	wsDebounceMillis: z.number().int().min(0).optional(), // Add wsDebounceMillis
+	wsDebounceMillis: z.number().int().min(0).optional(),
+	availableFolders: z.string().optional()
 }).strict();
 // ...existing code...
 
@@ -80,10 +55,6 @@ export const DEFAULT_SETTINGS: Settings = {
     enabled: true,
     advancedMode: false,
 		webSocketUrl: "wss://still-weekly-tortoise.ngrok-free.app/ws",
-    AIApiSettings: {
-        key: "",
-        url: process.env.SPECTACULAR_TARGET_PORT as string,
-    },
     triggers: [
         {type: "string", value: "# "},
         {type: "string", value: ". "},
@@ -112,13 +83,6 @@ export const DEFAULT_SETTINGS: Settings = {
 
     delay: 500,
     // Request settings
-    modelOptions: {
-        temperature: 1,
-        top_p: 0.1,
-        frequency_penalty: 0.25,
-        presence_penalty: 0,
-        max_tokens: 800,
-    },
     userMessageTemplate: "{{prefix}}<mask/>{{suffix}}",
     chainOfThoughRemovalRegex: `(.|\\n)*ANSWER:`,
     // Preprocessing settings
@@ -126,13 +90,10 @@ export const DEFAULT_SETTINGS: Settings = {
     maxPrefixCharLimit: 4000,
     maxSuffixCharLimit: 4000,
     // Postprocessing settings
-    removeDuplicateMathBlockIndicator: true,
-    removeDuplicateCodeBlockIndicator: true,
-    ignoredFilePatterns: "**/secret/**\n",
-    ignoredTags: "",
     cacheSuggestions: true,
     debugMode: false,
-	wsDebounceMillis: 1000 * 60 * 5, // Add default value (e.g., 5 minutes)
+		wsDebounceMillis: 1000 * 60 * 5,
+		availableFolders: ""
 	};
 
 	export const pluginDataSchema = z.object({
