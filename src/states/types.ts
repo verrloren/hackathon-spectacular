@@ -20,6 +20,6 @@ export interface EventHandler {
 
     getStatusBarText(): string;
 
-    handleFileChange(file: TFile): void;
+    handleFileChange(file: TFile | null): void;
 
 }

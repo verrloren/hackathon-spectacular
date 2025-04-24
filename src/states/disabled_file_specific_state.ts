@@ -14,7 +14,7 @@ class DisabledFileSpecificState extends State {
         }
     }
 
-    handleFileChange(file: TFile): void {
+    handleFileChange(file: TFile | null): void {
         if (this.context.settings.enabled) {
             this.context.transitionToIdleState();
         } else {

@@ -51,7 +51,7 @@ abstract class State implements EventHandler {
 
     abstract getStatusBarText(): string;
 
-    handleFileChange(file: TFile): void {
+    handleFileChange(file: TFile | null): void {
         if (this.context.isDisabled()) {
             this.context.transitionToIdleState();
         }

@@ -26,16 +26,16 @@ import { App, TFile } from "obsidian";
 import { Connection, ConnectionFactory, Session } from "./websocket/types";
 import WebSocketConnectionFactory from "./websocket/factory";
 import { v4 as uuidv4 } from "uuid";
+import { SyncManager } from "./sync/SyncManager";
 
 const FIVE_MINUTES_IN_MS = 1000 * 60 * 5;
 const MAX_N_ITEMS_IN_CACHE = 5000;
 
 class EventListener implements EventHandler, SettingsObserver {
     public view: EditorView | null = null;
-
-    private state: EventHandler = new InitState();
-    private statusBar: StatusBar;
-    private app: App;
+    public state: EventHandler = new InitState();
+    public statusBar: StatusBar;
+    public app: App;
     context: Context = Context.Text;
     settings: Settings;
     private currentFile: TFile | null = null;
@@ -49,13 +49,15 @@ class EventListener implements EventHandler, SettingsObserver {
     private wsConnectionFactory: ConnectionFactory;
     private isWsConnecting: boolean;
     private wsInitializationPromise: Promise<void> | null = null;
+		private syncManager: SyncManager;
 
     public static fromSettings(
         settings: Settings,
         statusBar: StatusBar,
-        app: App
+        app: App,
+				syncManager: SyncManager
     ): EventListener {
-        const eventListener = new EventListener(settings, statusBar, app);
+        const eventListener = new EventListener(settings, statusBar, app, syncManager);
 
         const settingErrors = checkForErrors(settings);
         if (settings.enabled) {
@@ -69,11 +71,16 @@ class EventListener implements EventHandler, SettingsObserver {
         return eventListener;
     }
 
-    private constructor(settings: Settings, statusBar: StatusBar, app: App) {
-        this.settings = settings;
-        this.statusBar = statusBar;
-        this.app = app;
-        this.wsConnectionFactory = new WebSocketConnectionFactory();
+    private constructor(settings: Settings, statusBar: StatusBar, app: App, syncManager: SyncManager) {
+			this.app = app;
+      this.settings = settings;
+      this.statusBar = statusBar;
+			this.syncManager = syncManager;
+      this.wsConnectionFactory = new WebSocketConnectionFactory();
+			this.suggestionCache = new LRUCache<string, string>({ 
+				max: MAX_N_ITEMS_IN_CACHE,
+				ttl: settings.cacheSuggestions ? FIVE_MINUTES_IN_MS : 0, 
+		});
     }
 
 		private isFileAllowed(file: TFile | null): boolean {
@@ -297,7 +304,7 @@ class EventListener implements EventHandler, SettingsObserver {
         this.view = view;
     }
 
-    async handleFileChange(file: TFile): Promise<void> {
+    async handleFileChange(file: TFile| null): Promise<void> {
 			this.currentFile = file;
 			console.log(`[EventListener] File changed: ${file?.path ?? 'None'}`);
 
@@ -324,8 +331,17 @@ class EventListener implements EventHandler, SettingsObserver {
 				}
 				await this.state.handleFileChange(file);
 			}
-			this.updateStatusBarText();
+			if (this.state && typeof this.state.handleFileChange === 'function') {
+				await this.state.handleFileChange(file);
+		}
 	}
+
+	public async cleanup(): Promise<void> {
+		console.log("[EventListener] Cleaning up...");
+		await this.closeWebSocketConnection();
+		this.suggestionCache.clear();
+}
+
     insertCurrentSuggestion(suggestion: string): void {
         if (this.view === null) {
             return;
@@ -485,7 +501,9 @@ class EventListener implements EventHandler, SettingsObserver {
     }
 
     handlePredictCommand(prefix: string, suffix: string): void {
-        this.state.handlePredictCommand(prefix, suffix);
+			if (this.isIdle() && !this.isDisabled()) {
+				this.transitionToPredictingState(prefix, suffix);
+			}
     }
 
     handleAcceptCommand(): void {

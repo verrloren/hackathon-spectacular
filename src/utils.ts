@@ -52,6 +52,7 @@ export function extractNextWordAndRemaining(suggestion: string): [string | undef
     if (!whitespaceAfterNextWordMatch) {
         nextWord = trimmedSuggestion || undefined;
     } else {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const whitespaceAfterNextWordStartingIndex = whitespaceAfterNextWordMatch.index!;
         const whitespaceAfterNextWord = whitespaceAfterNextWordMatch[0];
         const whitespaceLength = whitespaceAfterNextWord.length;
@@ -66,8 +67,4 @@ export function extractNextWordAndRemaining(suggestion: string): [string | undef
 
     return [nextWord ? leadingWhitespaces + nextWord : undefined, remaining];
 }
-
-
-
-
 

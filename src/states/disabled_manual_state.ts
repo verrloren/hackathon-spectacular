@@ -13,7 +13,7 @@ class DisabledManualState extends State {
         }
     }
 
-    handleFileChange(file: TFile): void {}
+    handleFileChange(file: TFile | null): void {}
 }
 
 export default DisabledManualState;

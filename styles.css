@@ -43,3 +43,39 @@
     75%  {clip-path:polygon(50% 50%,0 0,100% 0,100% 100%,0 100%,0 100%)}
     100% {clip-path:polygon(50% 50%,0 0,100% 0,100% 100%,0 100%,0 0)}
 }
+
+
+.nav-folder-title-content.spectacular-sync-indicator::after {
+  content: '●';
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 6px;
+  display: inline-block;
+  vertical-align: middle; 
+  opacity: 0.6;
+}
+
+.nav-folder-title-content.spectacular-sync-indicator-synced::after {
+  content: '✔';
+  color: var(--color-green);
+  opacity: 1.0;
+}
+
+.nav-folder-title-content.spectacular-sync-indicator-syncing::after {
+    content: '🔄';
+    color: var(--color-blue);
+    opacity: 1.0;
+    animation: spectacular-spin 1.5s linear infinite;
+}
+
+.nav-folder-title-content.spectacular-sync-indicator-error::after {
+    content: '❌';
+    color: var(--color-red);
+    opacity: 1.0;
+}
+
+
+@keyframes spectacular-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

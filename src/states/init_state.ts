@@ -30,7 +30,7 @@ class InitState implements EventHandler {
         return "Initializing...";
     }
 
-    handleFileChange(file: TFile): void {
+    handleFileChange(file: TFile | null): void {
 
     }
 }

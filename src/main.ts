@@ -1,70 +1,212 @@
-import {Editor, MarkdownView, Plugin, TFile} from "obsidian";
-import {SettingTab} from "./settings/SettingsTab";
+import {
+    Editor,
+    MarkdownView,
+    Plugin,
+    TFile,
+    Notice,
+    TFolder,
+    PluginManifest,
+    App,
+} from "obsidian";
+import { SettingTab } from "./settings/SettingsTab";
 import EventListener from "./event_listener";
 import StatusBar from "./status_bar";
 import DocumentChangesListener, {
-    getPrefix, getSuffix,
+    getPrefix,
+    getSuffix,
     hasMultipleCursors,
-    hasSelection
+    hasSelection,
 } from "./render_plugin/document_changes_listener";
-import {EditorView} from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import RenderSuggestionPlugin from "./render_plugin/render_surgestion_plugin";
-import {InlineSuggestionState} from "./render_plugin/states";
+import { InlineSuggestionState } from "./render_plugin/states";
 import CompletionKeyWatcher from "./render_plugin/completion_key_watcher";
-import {DEFAULT_SETTINGS, Settings} from "./settings/versions";
-import {deserializeSettings, serializeSettings} from "./settings/utils";
-
+import {
+    DEFAULT_SETTINGS,
+    Settings,
+    settingsSchema,
+} from "./settings/versions";
+import { SyncManager } from "./sync/SyncManager";
+import { SyncStatusBarUpdater } from "./sync/SyncStatusBarUpdater";
+import { SyncStatus } from "./sync/SyncStatus";
+import { debounce } from "lodash";
 
 export default class SpectacularPlugin extends Plugin {
-    async onload() {
-        const settings = await this.loadSettings();
+    settings: Settings;
+    settingTab: SettingTab;
+    eventListener: EventListener;
+    statusBar: StatusBar;
+    syncManager: SyncManager;
 
-        const settingsTab = await SettingTab.addSettingsTab(
+    private fileExplorerObserver: MutationObserver | null = null;
+    private currentSyncStatus: SyncStatus = "disabled";
+    private debouncedUpdateIcons: () => void;
+
+    constructor(app: App, manifest: PluginManifest) {
+        super(app, manifest);
+        this.debouncedUpdateIcons = debounce(
+            () => this.updateFolderIcons(),
+            150
+        );
+    }
+
+    async onload() {
+        await this.loadSettings();
+        this.statusBar = StatusBar.fromApp(this);
+        const syncStatusBarItem = this.addStatusBarItem();
+        syncStatusBarItem.addClass("spectacular-sync-status");
+
+        const syncStatusUpdater = new SyncStatusBarUpdater(
+            syncStatusBarItem,
+            (status: SyncStatus) => {
+              this.currentSyncStatus = status;
+              this.debouncedUpdateIcons();
+            }
+        );
+
+        this.syncManager = new SyncManager(
+            this.app,
+            this.settings,
+            syncStatusUpdater
+        );
+
+        this.currentSyncStatus = this.settings.allowedFolder
+            ? "idle"
+            : "disabled";
+
+        this.eventListener = EventListener.fromSettings(
+            this.settings,
+            this.statusBar,
+            this.app,
+            this.syncManager
+        );
+
+        this.settingTab = new SettingTab(
             this,
-            settings,
+            this.settings,
             this.saveSettings.bind(this)
         );
-        const statusBar = StatusBar.fromApp(this);
+        this.settingTab.addObserver(this.eventListener);
+        this.addSettingTab(this.settingTab);
 
-        const eventListener = EventListener.fromSettings(
-            settingsTab.settings,
-            statusBar,
-            this.app
-        );
-        settingsTab.addObserver(eventListener);
         this.registerEditorExtension([
             InlineSuggestionState,
             CompletionKeyWatcher(
-                eventListener.handleAcceptKeyPressed.bind(eventListener),
-                eventListener.handlePartialAcceptKeyPressed.bind(eventListener),
-                eventListener.handleCancelKeyPressed.bind(eventListener),
+                this.eventListener.handleAcceptKeyPressed.bind(
+                    this.eventListener
+                ),
+                this.eventListener.handlePartialAcceptKeyPressed.bind(
+                    this.eventListener
+                ),
+                this.eventListener.handleCancelKeyPressed.bind(
+                    this.eventListener
+                )
             ),
             DocumentChangesListener(
-                eventListener.handleDocumentChange.bind(eventListener)
+                // Use the default export name
+                this.eventListener.handleDocumentChange.bind(this.eventListener)
             ),
             RenderSuggestionPlugin(),
+            // Add listener for view updates if needed by EventListener
+            EditorView.updateListener.of((update) => {
+                if (
+                    update.docChanged ||
+                    update.selectionSet ||
+                    update.focusChanged
+                ) {
+                    this.eventListener.onViewUpdate(update.view);
+                }
+            }),
         ]);
 
+        // --- Workspace Event Handlers ---
         this.app.workspace.onLayoutReady(() => {
             const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-
             if (view) {
                 // @ts-expect-error, not typed
                 const editorView = view.editor.cm as EditorView;
-                eventListener.onViewUpdate(editorView);
+                this.eventListener.onViewUpdate(editorView);
+                // Initial file check on layout ready
+                // *** Pass TFile | null ***
+                this.eventListener.handleFileChange(
+                    view.file instanceof TFile ? view.file : null
+                );
+            } else {
+                this.eventListener.handleFileChange(null);
             }
+            this.observeFileExplorer();
+            this.debouncedUpdateIcons();
         });
+
         this.app.workspace.on("active-leaf-change", (leaf) => {
             if (leaf?.view instanceof MarkdownView) {
                 // @ts-expect-error, not typed
                 const editorView = leaf.view.editor.cm as EditorView;
-                eventListener.onViewUpdate(editorView);
-                eventListener.handleFileChange(leaf.view.file);
+                this.eventListener.onViewUpdate(editorView);
+                // *** Pass TFile | null ***
+                this.eventListener.handleFileChange(
+                    leaf.view.file instanceof TFile ? leaf.view.file : null
+                );
+            } else {
+                this.eventListener.handleFileChange(null);
             }
         });
-        this.app.metadataCache.on("changed", (file: TFile) => {
-            eventListener.handleFileChange(file);
-        });
+
+        this.registerEvent(
+            this.app.workspace.on("file-menu", (menu, file) => {
+                if (file instanceof TFolder) {
+                    const folderPath = file.path;
+                    const isCurrentlySyncedFolder =
+                        this.settings.allowedFolder === folderPath;
+
+                    menu.addItem((item) => {
+                        item.setTitle("Sync Folder")
+                            .setIcon("sync")
+                            .onClick(async () => {
+                                if (
+                                    this.settings.allowedFolder === folderPath
+                                ) {
+                                    new Notice(
+                                        `Folder "${folderPath}" is already selected. Triggering sync.`
+                                    );
+                                    await this.syncManager.triggerSync();
+                                } else {
+                                    new Notice(
+                                        `Setting "${folderPath}" as sync folder and starting sync.`
+                                    );
+                                    this.settings.allowedFolder = folderPath;
+                                    await this.saveSettings();
+                                    this.eventListener.handleSettingChanged(
+                                        this.settings
+                                    );
+                                    this.debouncedUpdateIcons();
+                                    this.settingTab.display();
+                                }
+                            });
+                    });
+
+                    if (isCurrentlySyncedFolder) {
+                        menu.addItem((item) => {
+                            item.setTitle("Disconnect Folder")
+                                .setIcon("unlink")
+                                .onClick(async () => {
+                                    new Notice(
+                                        `Disconnecting sync folder "${folderPath}".`
+                                    );
+                                    this.settings.allowedFolder = undefined;
+                                    await this.saveSettings();
+                                    this.eventListener.handleSettingChanged(
+                                        this.settings
+                                    );
+                                    this.settingTab.display();
+                                });
+                        });
+                    }
+                }
+            })
+        );
+
+        // --- Commands ---
         this.addCommand({
             id: "accept",
             name: "Accept",
@@ -75,12 +217,11 @@ export default class SpectacularPlugin extends Plugin {
             ) => {
                 if (checking) {
                     return (
-                        eventListener.isSuggesting()
+                        this.eventListener.isSuggesting() &&
+                        !this.eventListener.isDisabled()
                     );
                 }
-
-                eventListener.handleAcceptCommand();
-
+                this.eventListener.handleAcceptKeyPressed();
                 return true;
             },
         });
@@ -97,70 +238,190 @@ export default class SpectacularPlugin extends Plugin {
                 const editorView = editor.cm as EditorView;
                 const state = editorView.state;
                 if (checking) {
-                    return eventListener.isIdle() && !hasMultipleCursors(state) && !hasSelection(state);
+                    return (
+                        this.eventListener.isIdle() &&
+                        !this.eventListener.isDisabled() &&
+                        !hasMultipleCursors(state) &&
+                        !hasSelection(state)
+                    );
                 }
-
-                const prefix = getPrefix(state)
-                const suffix = getSuffix(state)
-
-                eventListener.handlePredictCommand(prefix, suffix);
+                const prefix = getPrefix(state);
+                const suffix = getSuffix(state);
+                this.eventListener.handlePredictCommand(prefix, suffix);
                 return true;
             },
         });
 
         this.addCommand({
             id: "toggle",
-            name: "Toggle",
+            name: "Toggle Enable/Disable",
             callback: () => {
-                const newValue = !settingsTab.settings.enabled;
-                settingsTab.setEnable(newValue);
+                const newValue = !this.settings.enabled;
+                this.settings.enabled = newValue;
+                this.saveSettings().then(() => {
+                    this.eventListener.handleSettingChanged(this.settings);
+                    new Notice(
+                        `Spectacular ${newValue ? "enabled" : "disabled"}.`
+                    );
+                });
             },
         });
+
         this.addCommand({
             id: "enable",
             name: "Enable",
             checkCallback: (checking) => {
                 if (checking) {
-                    return !settingsTab.settings.enabled;
+                    return !this.settings.enabled;
                 }
-
-                settingsTab.setEnable(true);
+                this.settings.enabled = true;
+                this.saveSettings().then(() => {
+                    this.eventListener.handleSettingChanged(this.settings);
+                    new Notice(`Spectacular enabled.`);
+                });
                 return true;
             },
         });
+
         this.addCommand({
             id: "disable",
             name: "Disable",
             checkCallback: (checking) => {
+                // *** Access settings via this.settings ***
                 if (checking) {
-                    return settingsTab.settings.enabled;
+                    return this.settings.enabled;
                 }
-
-                settingsTab.setEnable(false);
+                // *** Update settings directly and save/notify ***
+                this.settings.enabled = false;
+                this.saveSettings().then(() => {
+                    this.eventListener.handleSettingChanged(this.settings);
+                    new Notice(`Spectacular disabled.`);
+                });
                 return true;
             },
         });
 
+        // *** Add Sync Command ***
+        this.addCommand({
+            id: "spectacular-sync-allowed-folder",
+            name: "Sync Allowed Folder",
+            callback: () => {
+                this.syncManager.triggerSync();
+            },
+        });
+
+        // --- Initial Sync Trigger on Load ---
+        if (this.settings.allowedFolder) {
+            console.log("[main] Triggering initial sync on load.");
+            setTimeout(() => this.syncManager.triggerSync(), 1500);
+        }
+
+        console.log("Spectacular plugin loaded.");
     }
 
-    private async saveSettings(settings: Settings): Promise<void> {
-        const data = serializeSettings(settings);
-        await this.saveData(data);
+    observeFileExplorer() {
+        this.fileExplorerObserver?.disconnect();
+        const fileExplorer = this.app.workspace.containerEl.querySelector(
+            ".nav-files-container"
+        );
+        if (!fileExplorer) {
+            console.warn(
+                "Spectacular: Could not find file explorer container to observe."
+            );
+            return;
+        }
+        this.fileExplorerObserver = new MutationObserver((mutations) => {
+            let needsUpdate = false;
+            for (const mutation of mutations) {
+                if (
+                    mutation.type === "childList" &&
+                    (mutation.addedNodes.length > 0 ||
+                        mutation.removedNodes.length > 0)
+                ) {
+                    needsUpdate = true;
+                    break;
+                }
+            }
+            if (needsUpdate) {
+                this.debouncedUpdateIcons();
+            }
+        });
+        this.fileExplorerObserver.observe(fileExplorer, {
+            childList: true,
+            subtree: true,
+        });
     }
 
-    private async loadSettings(): Promise<Settings> {
-        const data = await this.loadData();
-        const result = deserializeSettings(data);
-        if (result.isOk()) {
-            return result.value;
-        } else {
-            // new Notice(`Spectacular: Could not load settings, reverting to default settings ${result.error}`);
-            return DEFAULT_SETTINGS
+    updateFolderIcons() {
+        const allowedFolderPath = this.settings.allowedFolder;
+        const status = this.currentSyncStatus;
+
+        const folderTitleContents =
+            this.app.workspace.containerEl.querySelectorAll(
+                ".nav-folder-title-content"
+            );
+
+        folderTitleContents.forEach((contentEl) => {
+            const folderTitleEl = contentEl.closest(".nav-folder-title") as HTMLElement | null;
+            const folderPath = folderTitleEl?.dataset.path;
+
+            contentEl.classList.remove(
+                "spectacular-sync-indicator",
+                "spectacular-sync-indicator-synced",
+                "spectacular-sync-indicator-syncing",
+                "spectacular-sync-indicator-error"
+            );
+
+            if (folderPath && folderPath === allowedFolderPath) {
+                contentEl.classList.add("spectacular-sync-indicator");
+
+                if (status === "synced") {
+                    contentEl.classList.add(
+                        "spectacular-sync-indicator-synced"
+                    );
+                } else if (status === "syncing") {
+                    contentEl.classList.add(
+                        "spectacular-sync-indicator-syncing"
+                    );
+                } else if (status === "error") {
+                    contentEl.classList.add("spectacular-sync-indicator-error");
+                }
+            }
+        });
+    }
+
+    async saveSettings(): Promise<void> {
+        const previousFolder = this.settings.allowedFolder;
+        await this.saveData(this.settings);
+        if (previousFolder !== this.settings.allowedFolder) {
+            this.debouncedUpdateIcons();
         }
     }
 
-    onunload() {
+    async loadSettings(): Promise<void> {
+        const loadedData = await this.loadData();
+        try {
+          this.settings = settingsSchema.parse(
+              loadedData || DEFAULT_SETTINGS
+          );
+          console.log("[main] Settings loaded successfully.");
+        } catch (e) {
+            console.warn(
+                "Spectacular: Error parsing settings, falling back to defaults.",
+                e
+            );
+            new Notice(
+                "Spectacular: Settings were corrupted and have been reset to default."
+            );
+            this.settings = DEFAULT_SETTINGS;
+            await this.saveSettings();
+        }
+    }
+
+    async onunload() {
+			this.fileExplorerObserver?.disconnect();
+      if (this.eventListener) {
+          await this.eventListener.cleanup();
+      }
     }
 }
-
-
