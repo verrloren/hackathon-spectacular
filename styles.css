@@ -79,3 +79,15 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+
+.cm-spectacular-suggestion {
+  color: var(--text-muted);
+  opacity: 0.6;
+  font-style: italic;
+	user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  pointer-events: none;
+}

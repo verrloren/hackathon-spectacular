@@ -1,45 +1,65 @@
-import { App, TFile, TFolder } from "obsidian";
+import { App, TFile, TFolder, Vault } from "obsidian";
+import { docsApi, FileData } from "src/prediction_services/api_clients/api";
 
 export class FileSyncTask {
     private app: App;
+		private vault: Vault;
     private folderPath: string;
 
     constructor(app: App, folderPath: string) {
         this.app = app;
+				this.vault = app.vault;
         this.folderPath = folderPath;
     }
 
-    public async run(): Promise<void> {
-        console.log(`[FileSyncTask] Starting sync for folder: ${this.folderPath}`);
+    async run(): Promise<void> {
+			console.log(`[FileSyncTask] Starting sync for folder: ${this.folderPath}`);
+			const folder = this.vault.getAbstractFileByPath(this.folderPath);
 
-        const folder = this.app.vault.getAbstractFileByPath(this.folderPath);
-        if (!(folder instanceof TFolder)) {
-            throw new Error(`Allowed folder "${this.folderPath}" not found or is not a folder.`);
-        }
+			if (!folder || !(folder instanceof TFolder)) {
+					throw new Error(`Folder not found or invalid: ${this.folderPath}`);
+			}
 
-        const filesToSync: TFile[] = [];
-        const collectFiles = (currentFolder: TFolder) => {
-            currentFolder.children.forEach(child => {
-                if (child instanceof TFile && child.extension === 'md') { 
-                    filesToSync.push(child);
-                } else if (child instanceof TFolder) {
-                    collectFiles(child); 
-                }
-            });
-        };
-        collectFiles(folder);
+			const filesToSync: TFile[] = [];
+			Vault.recurseChildren(folder, (file) => {
+					if (file instanceof TFile && file.extension === 'md') { 
+							filesToSync.push(file);
+					}
+			});
 
-        console.log(`[FileSyncTask] Found ${filesToSync.length} files to sync.`);
+			if (filesToSync.length === 0) {
+					console.log(`[FileSyncTask] No markdown files found in folder: ${this.folderPath}. Sync complete.`);
+					return;
+			}
 
-        for (const file of filesToSync) {
-            console.log(`[FileSyncTask] Syncing: ${file.path}`);
-            await new Promise(resolve => setTimeout(resolve, 50));
-            // TODO: Replace with actual backend API call, e.g.,
-            // await this.backendApi.syncFile(file.path, await this.app.vault.read(file));
-        }
+			console.log(`[FileSyncTask] Found ${filesToSync.length} markdown files to sync.`);
 
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate backend processing
+			const fileDataArray: FileData[] = [];
+			const docIds: string[] = [];
 
-        console.log(`[FileSyncTask] Sync completed for folder: ${this.folderPath}`);
-    }
+			for (const file of filesToSync) {
+					try {
+							const content = await this.vault.cachedRead(file);
+							fileDataArray.push({
+									path: file.path,
+									content: content
+							});
+							docIds.push(file.path); 
+							console.log(`[FileSyncTask] Read content for: ${file.path}`);
+					} catch (readError) {
+							console.error(`[FileSyncTask] Error reading file ${file.path}:`, readError);
+					}
+			}
+
+			try {
+					await docsApi.sendDocs(this.folderPath, docIds, fileDataArray);
+					console.log(`[FileSyncTask] Successfully sent ${fileDataArray.length} documents via API.`);
+
+			} catch (apiError) {
+					console.error(`[FileSyncTask] API call failed for folder ${this.folderPath}:`, apiError);
+					throw apiError;
+			}
+
+			console.log(`[FileSyncTask] Sync completed for folder: ${this.folderPath}`);
+	}
 }
