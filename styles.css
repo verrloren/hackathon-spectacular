@@ -56,20 +56,20 @@
 }
 
 .nav-folder-title-content.spectacular-sync-indicator-synced::after {
-  content: '✔';
+  content: '●';
   color: var(--color-green);
   opacity: 1.0;
 }
 
 .nav-folder-title-content.spectacular-sync-indicator-syncing::after {
-    content: '🔄';
+    content: '●';
     color: var(--color-blue);
     opacity: 1.0;
     animation: spectacular-spin 1.5s linear infinite;
 }
 
 .nav-folder-title-content.spectacular-sync-indicator-error::after {
-    content: '❌';
+    content: '●';
     color: var(--color-red);
     opacity: 1.0;
 }

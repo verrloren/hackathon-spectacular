@@ -7,6 +7,7 @@ import {
     TFolder,
     PluginManifest,
     App,
+		TAbstractFile,
 } from "obsidian";
 import { SettingTab } from "./settings/SettingsTab";
 import EventListener from "./event_listener";
@@ -195,6 +196,14 @@ export default class SpectacularPlugin extends Plugin {
             })
         );
 
+				this.registerEvent(
+					this.app.vault.on('modify', (file) => {
+							this.handleFileModify(file);
+					})
+			);
+
+			
+
         // --- Commands ---
         this.addCommand({
             id: "accept",
@@ -307,6 +316,17 @@ export default class SpectacularPlugin extends Plugin {
 
         console.log("Spectacular plugin loaded.");
     }
+
+		private handleFileModify(file: TAbstractFile) {
+			if (!(file instanceof TFile)) {
+					return;
+			}
+
+			const allowedFolder = this.settings.allowedFolder;
+			if (allowedFolder && file.path.startsWith(allowedFolder + (allowedFolder === '/' ? '' : '/'))) {
+				this.syncManager.notifyFileModified();
+			}
+	}
 
     observeFileExplorer() {
         this.fileExplorerObserver?.disconnect();
