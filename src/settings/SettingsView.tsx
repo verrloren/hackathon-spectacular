@@ -13,6 +13,7 @@ import { MAX_DELAY, MAX_MAX_CHAR_LIMIT, MIN_DELAY, MIN_MAX_CHAR_LIMIT } from "./
 
 interface IProps {
   onSettingsChanged(settings: Settings): void;
+	onFolderChanged(folderPath: string | undefined): void;
   settings: Settings;
 	availableFolders: string[];
 }
@@ -34,8 +35,10 @@ export default function SettingsView(props: IProps): React.JSX.Element {
     };
 
 		const handleFolderChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-			updateSettings({ allowedFolder: event.target.value });
-	};
+      const newFolder = event.target.value === "" ? undefined : event.target.value;
+      props.onFolderChanged(newFolder);
+      _setSettings(current => ({...current, allowedFolder: newFolder}));
+    };
 
     return (
         <div>

@@ -93,7 +93,7 @@ export const DEFAULT_SETTINGS: Settings = {
     cacheSuggestions: true,
     debugMode: false,
 		wsDebounceMillis: 1000 * 60 * 5,
-		allowedFolder: ""
+		allowedFolder: undefined
 	};
 
 	export const pluginDataSchema = z.object({

@@ -82,11 +82,13 @@ export default class SpectacularPlugin extends Plugin {
         );
 
         this.settingTab = new SettingTab(
-            this,
-            this.settings,
-            this.saveSettings.bind(this)
-        );
-        this.settingTab.addObserver(this.eventListener);
+					this, 
+					async (settingsToSave: Settings) => {
+						await this.saveSettings(settingsToSave); 
+						this.eventListener.handleSettingChanged(this.settings);
+					}
+			);
+        // this.settingTab.addObserver(this.eventListener);
         this.addSettingTab(this.settingTab);
 
         this.registerEditorExtension([
@@ -126,8 +128,6 @@ export default class SpectacularPlugin extends Plugin {
                 // @ts-expect-error, not typed
                 const editorView = view.editor.cm as EditorView;
                 this.eventListener.onViewUpdate(editorView);
-                // Initial file check on layout ready
-                // *** Pass TFile | null ***
                 this.eventListener.handleFileChange(
                     view.file instanceof TFile ? view.file : null
                 );
@@ -159,33 +159,20 @@ export default class SpectacularPlugin extends Plugin {
                     const isCurrentlySyncedFolder =
                         this.settings.allowedFolder === folderPath;
 
-                    menu.addItem((item) => {
-                        item.setTitle("Sync Folder")
-                            .setIcon("sync")
-                            .onClick(async () => {
-                                if (
-                                    this.settings.allowedFolder === folderPath
-                                ) {
-                                    new Notice(
-                                        `Folder "${folderPath}" is already selected. Triggering sync.`
-                                    );
-                                    await this.syncManager.triggerSync();
-                                } else {
-                                    new Notice(
-                                        `Setting "${folderPath}" as sync folder and starting sync.`
-                                    );
-                                    this.settings.allowedFolder = folderPath;
-                                    await this.saveSettings();
-                                    this.eventListener.handleSettingChanged(
-                                        this.settings
-                                    );
-                                    this.debouncedUpdateIcons();
-                                    this.settingTab.display();
-                                }
-                            });
-                    });
+
 
                     if (isCurrentlySyncedFolder) {
+											menu.addItem((item) => {
+                        item.setTitle("Sync Folder")
+                            .setIcon("sync")
+                                .onClick(async () => {
+                                    new Notice(
+                                        `Triggering sync for "${folderPath}".`
+                                    );
+                                    await this.syncManager.triggerSync();
+                                });
+                    });
+
                         menu.addItem((item) => {
                             item.setTitle("Disconnect Folder")
                                 .setIcon("unlink")
@@ -353,70 +340,114 @@ export default class SpectacularPlugin extends Plugin {
     }
 
     updateFolderIcons() {
-        const allowedFolderPath = this.settings.allowedFolder;
-        const status = this.currentSyncStatus;
+			const allowedFolderPath = this.settings.allowedFolder;
+			const status = this.currentSyncStatus;
+			const folderNameTextSelector = ".nav-folder-title-content";
+			const folderTitleRowSelector = ".nav-folder-title";
+			const pathAttributeName = "data-path";
 
-        const folderTitleContents =
-            this.app.workspace.containerEl.querySelectorAll(
-                ".nav-folder-title-content"
-            );
+			console.log(`[updateFolderIcons] START. Allowed: '${allowedFolderPath}', Status: '${status}'`);
 
-        folderTitleContents.forEach((contentEl) => {
-            const folderTitleEl = contentEl.closest(".nav-folder-title") as HTMLElement | null;
-            const folderPath = folderTitleEl?.dataset.path;
+			const folderTitleContents =
+					this.app.workspace.containerEl.querySelectorAll(folderNameTextSelector);
 
-            contentEl.classList.remove(
-                "spectacular-sync-indicator",
-                "spectacular-sync-indicator-synced",
-                "spectacular-sync-indicator-syncing",
-                "spectacular-sync-indicator-error"
-            );
+			if (folderTitleContents.length === 0) {
+					console.warn(`[updateFolderIcons] WARN: No elements found with selector: ${folderNameTextSelector}`);
+					return;
+			} else {
+					console.log(`[updateFolderIcons] Found ${folderTitleContents.length} elements.`);
+			}
 
-            if (folderPath && folderPath === allowedFolderPath) {
-                contentEl.classList.add("spectacular-sync-indicator");
+			folderTitleContents.forEach((contentEl, index) => {
+					const folderTitleEl = contentEl.closest(folderTitleRowSelector) as HTMLElement | null;
+					const folderPath = folderTitleEl?.getAttribute(pathAttributeName);
 
-                if (status === "synced") {
-                    contentEl.classList.add(
-                        "spectacular-sync-indicator-synced"
-                    );
-                } else if (status === "syncing") {
-                    contentEl.classList.add(
-                        "spectacular-sync-indicator-syncing"
-                    );
-                } else if (status === "error") {
-                    contentEl.classList.add("spectacular-sync-indicator-error");
-                }
-            }
-        });
-    }
+					console.log(`[updateFolderIcons] Processing Element ${index}: Path='${folderPath ?? 'null'}'`);
 
-    async saveSettings(): Promise<void> {
-        const previousFolder = this.settings.allowedFolder;
-        await this.saveData(this.settings);
-        if (previousFolder !== this.settings.allowedFolder) {
-            this.debouncedUpdateIcons();
-        }
-    }
+					const previousClasses = Array.from(contentEl.classList).filter(c => c.startsWith('spectacular-sync-indicator'));
+
+					contentEl.classList.remove(
+							"spectacular-sync-indicator",
+							"spectacular-sync-indicator-synced",
+							"spectacular-sync-indicator-syncing",
+							"spectacular-sync-indicator-error"
+					);
+					if (previousClasses.length > 0) {
+							console.log(`[updateFolderIcons] Element ${index} ('${folderPath}'): REMOVED classes: ${previousClasses.join(', ')}`);
+					}
+
+
+					if (folderPath && folderPath === allowedFolderPath) {
+							console.log(`[updateFolderIcons] Element ${index} ('${folderPath}'): MATCH FOUND. Applying base class and status class for '${status}'.`);
+							contentEl.classList.add("spectacular-sync-indicator");
+
+							if (status === "synced") {
+									contentEl.classList.add("spectacular-sync-indicator-synced");
+							} else if (status === "syncing") {
+									contentEl.classList.add("spectacular-sync-indicator-syncing");
+							} else if (status === "error") {
+									contentEl.classList.add("spectacular-sync-indicator-error");
+							}
+							console.log(`[updateFolderIcons] Element ${index} ('${folderPath}'): Current classes after add: ${Array.from(contentEl.classList).join(', ')}`);
+					} else {
+							console.log(`[updateFolderIcons] Element ${index} ('${folderPath}'): No match.`);
+					}
+			});
+			console.log(`[updateFolderIcons] END.`);
+	}
 
     async loadSettings(): Promise<void> {
         const loadedData = await this.loadData();
-        try {
-          this.settings = settingsSchema.parse(
-              loadedData || DEFAULT_SETTINGS
-          );
-          console.log("[main] Settings loaded successfully.");
-        } catch (e) {
-            console.warn(
-                "Spectacular: Error parsing settings, falling back to defaults.",
-                e
-            );
-            new Notice(
-                "Spectacular: Settings were corrupted and have been reset to default."
-            );
-            this.settings = DEFAULT_SETTINGS;
-            await this.saveSettings();
-        }
+        if (loadedData) {
+					try {
+							console.log("[main] Parsing loaded data with schema...");
+							this.settings = settingsSchema.parse(loadedData);
+							console.log("[main] Settings parsed successfully:", this.settings);
+					} catch (e) {
+							console.error(
+									"Spectacular: Error parsing settings, falling back to defaults.",
+									e
+							);
+							new Notice(
+									"Spectacular: Settings were corrupted and have been reset to default."
+							);
+							this.settings = DEFAULT_SETTINGS;
+							console.log("[main] Using default settings:", this.settings);
+							await this.saveSettings();
+							console.log("[main] Default settings saved.");
+					}
+			} else {
+					console.log("[main] No settings data found. Using default settings.");
+					this.settings = DEFAULT_SETTINGS;
+					console.log("[main] Using default settings:", this.settings);
+			}
     }
+
+    async saveSettings(settingsToSave?: Settings): Promise<void> {
+			const previousFolder = this.settings.allowedFolder;
+
+			if (settingsToSave) {
+					console.log("[main] Updating internal settings from settingsToSave.");
+					this.settings = settingsToSave;
+			} else {
+					console.log("[main] saveSettings called without new settings object (e.g., from command).");
+			}
+
+			console.log("[main] Saving settings:", this.settings);
+			await this.saveData(this.settings);
+			console.log("[main] Settings saved to data.json.");
+
+			if (previousFolder !== this.settings.allowedFolder) {
+					console.log(`[main] Allowed folder changed ('${previousFolder}' -> '${this.settings.allowedFolder}'). Scheduling immediate icon update.`);
+					setTimeout(() => {
+							console.log("[main] Executing scheduled immediate icon update.");
+							this.updateFolderIcons();
+					}, 0);
+			} else {
+					console.log(`[main] Allowed folder did not change ('${previousFolder}'). No immediate icon update scheduled.`);
+			}
+	}
+
 
     async onunload() {
 			this.fileExplorerObserver?.disconnect();

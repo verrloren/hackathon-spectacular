@@ -15,7 +15,6 @@ import SuggestingState from "./states/suggesting_state";
 import { checkForErrors } from "./settings/utils";
 import Context from "./context_detection";
 import { Settings } from "./settings/versions";
-import { SettingsObserver } from "./settings/SettingsTab";
 import DisabledManualState from "./states/disabled_manual_state";
 import DisabledFileSpecificState from "./states/disabled_file_specific_state";
 import { LRUCache } from "lru-cache";
@@ -31,7 +30,7 @@ import { SyncManager } from "./sync/SyncManager";
 const FIVE_MINUTES_IN_MS = 1000 * 60 * 5;
 const MAX_N_ITEMS_IN_CACHE = 5000;
 
-class EventListener implements EventHandler, SettingsObserver {
+class EventListener implements EventHandler {
     public view: EditorView | null = null;
     public state: EventHandler = new InitState();
     public statusBar: StatusBar;
@@ -426,16 +425,26 @@ class EventListener implements EventHandler, SettingsObserver {
     getStatusBarText(): string {
         return `Spectacular: ${this.state.getStatusBarText()}`;
     }
+    handleSettingChanged(newSettings: Settings): void {
+			console.log("[EventListener] Settings changed. Updating internal state and notifying SyncManager.");
+			this.settings = newSettings; // Update EventListener's internal settings
 
-    handleSettingChanged(settings: Settings): void {
-        this.settings = settings;
-        if (!this.settings.cacheSuggestions) {
-            this.clearSuggestionsCache();
-        }
+			// *** Crucial: Update SyncManager's settings ***
+			this.syncManager.updateSettings(newSettings);
 
-        this.state.handleSettingChanged(settings);
-    }
-
+			// ... rest of handleSettingChanged logic (state transitions, etc.) ...
+			if (!this.settings.cacheSuggestions) {
+					this.clearSuggestionsCache();
+			}
+			if (this.state instanceof IdleState && !this.wsConnection && !this.isWsConnecting) {
+					this.initializeWebSocket();
+			}
+			// Pass change to current state if needed
+			if (this.state && typeof this.state.handleSettingChanged === 'function') {
+					this.state.handleSettingChanged(newSettings);
+			}
+			this.updateStatusBarText();
+	}
     async handleDocumentChange(
         documentChanges: DocumentChanges
     ): Promise<void> {
