@@ -1,4 +1,4 @@
-import {ApiClient, ChatMessage, ModelOptions} from "../types";
+import {ApiClient, ChatMessage} from "../types";
 
 import {Settings} from "../../settings/versions";
 import {Result} from "neverthrow";
@@ -7,21 +7,17 @@ import {makeAPIRequest} from "./utils";
 
 class AIApiClient implements ApiClient {
     private readonly url: string;
-    private readonly modelOptions: ModelOptions;
 
     static fromSettings(settings: Settings): AIApiClient {
         return new AIApiClient(
-					settings.AIApiSettings.url,
-					settings.modelOptions,
+					settings.webSocketUrl,
         );
     }
 
     constructor(
         url: string,
-        modelOptions: ModelOptions
     ) {
         this.url = url;
-        this.modelOptions = modelOptions;
     }
 
     async queryChatModel(messages: ChatMessage[]): Promise<Result<string, Error>> {
@@ -31,7 +27,6 @@ class AIApiClient implements ApiClient {
         };
         const body = {
             messages,
-            ...this.modelOptions,
         }
 
         const data = await makeAPIRequest(this.url, "POST", body, headers);

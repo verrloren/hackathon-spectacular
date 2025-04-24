@@ -54,7 +54,7 @@ export const DEFAULT_SETTINGS: Settings = {
     version: "1",
     enabled: true,
     advancedMode: false,
-		webSocketUrl: "wss://still-weekly-tortoise.ngrok-free.app/ws",
+		webSocketUrl: "wss://pobeda.loca.lt/ws",
     triggers: [
         {type: "string", value: "# "},
         {type: "string", value: ". "},

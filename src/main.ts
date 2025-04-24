@@ -177,16 +177,15 @@ export default class SpectacularPlugin extends Plugin {
                             item.setTitle("Disconnect Folder")
                                 .setIcon("unlink")
                                 .onClick(async () => {
-                                    new Notice(
-                                        `Disconnecting sync folder "${folderPath}".`
-                                    );
-                                    this.settings.allowedFolder = undefined;
-                                    await this.saveSettings();
-                                    this.eventListener.handleSettingChanged(
-                                        this.settings
-                                    );
-                                    this.settingTab.display();
-                                });
+																	const folderToDisconnect = this.settings.allowedFolder;
+																	if (!folderToDisconnect) return; 
+																	new Notice(
+																			`Disconnecting sync folder "${folderToDisconnect}".`
+																	);
+																	this.settings.allowedFolder = undefined;
+																	await this.saveSettings();
+																	this.settingTab.display();
+															});
                         });
                     }
                 }

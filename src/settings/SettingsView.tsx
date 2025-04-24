@@ -35,10 +35,12 @@ export default function SettingsView(props: IProps): React.JSX.Element {
     };
 
 		const handleFolderChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const newFolder = event.target.value === "" ? undefined : event.target.value;
+      const newFolder = event.target.value;
       props.onFolderChanged(newFolder);
       _setSettings(current => ({...current, allowedFolder: newFolder}));
     };
+
+		
 
     return (
         <div>
@@ -57,10 +59,16 @@ export default function SettingsView(props: IProps): React.JSX.Element {
                         className="dropdown"
                         value={settings.allowedFolder || ""}
                         onChange={handleFolderChange}
+												disabled={props.availableFolders.length === 0}
                     >
-                        <option value="">All Folders</option>
+												{props.availableFolders.length === 0 && (
+                          <option value="">No folders available</option>
+                        )}
+												{props.availableFolders.length > 0 && (
+                          <option value="" disabled>Select Folder</option>
+                        )}
                         {props.availableFolders.map(folderPath => {
-                            const displayPath = folderPath === "/" ? "/" : folderPath;
+                            const displayPath = folderPath;
                             return (
                                 <option key={folderPath} value={folderPath}>
                                     {displayPath}

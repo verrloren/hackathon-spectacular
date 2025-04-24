@@ -1,61 +1,53 @@
-import {PluginSettingTab, TFolder, Notice} from "obsidian"; // Added Notice, App
+import {PluginSettingTab, TFolder, Notice} from "obsidian"; 
 import {createRoot, Root} from "react-dom/client";
 import SettingsView from "./SettingsView";
 import * as React from "react";
 import {Settings} from "./versions";
 import {checkForErrors} from "./utils";
-// *** Import your specific plugin class ***
 import SpectacularPlugin from "../main";
 
-// Remove observer interface if not used elsewhere
-// export interface SettingsObserver {
-//     handleSettingChanged(settings: Settings): void;
-// }
 
-// Type for the save callback passed from main.ts
 type SaveCallback = (settings: Settings) => Promise<void>;
 
 
 export class SettingTab extends PluginSettingTab {
-    // Settings are accessed via this.plugin.settings
     private updatedSettingsBuffer: Partial<Settings> | undefined = undefined; // Buffer for non-folder changes
-    // private observers: SettingsObserver[] = []; // Remove if not used
     private root: Root | undefined = undefined;
     private saveCallback: SaveCallback;
-    // *** Change the type here ***
     private plugin: SpectacularPlugin;
 
-    // Remove static factory method if main.ts handles instantiation
-    // public static addSettingsTab(...)
 
     public constructor(
-        // *** Change the type here ***
         plugin: SpectacularPlugin,
         saveCallback: SaveCallback
     ) {
-        super(plugin.app, plugin); // Use plugin.app
+        super(plugin.app, plugin); 
         this.plugin = plugin;
         this.saveCallback = saveCallback;
     }
 
-    // Remove addObserver if not used
-    // public addObserver(observer: SettingsObserver): void { ... }
-
-    // Remove setEnable if commands handle it directly in main.ts
-    // public setEnable(enabled: boolean): void { ... }
-
-    // Remove updateObservers if not used (notification happens in main.ts callback)
-    // private updateObservers(): void { ... }
-
     display(): void {
-            this.containerEl.empty();
+      this.containerEl.empty();
       this.root = createRoot(this.containerEl);
 
-            const vaultFolders = this.app.vault.getAllLoadedFiles()
-                .filter((file): file is TFolder => file instanceof TFolder)
-                .map(folder => folder.path)
-                .sort();
+      const vaultFolders = this.app.vault.getAllLoadedFiles()
+				.filter((file): file is TFolder => file instanceof TFolder && file.path !== "/")
+				.map(folder => folder.path)
+				.sort();
 
+      // if (vaultFolders.length === 0) {
+			// 	console.warn("Spectacular: No valid non-root folders found in the vault.");
+			// }
+
+			// let currentSelectedFolder = this.plugin.settings.allowedFolder;
+			// if ((!currentSelectedFolder || currentSelectedFolder === "/") && vaultFolders.length > 0) {
+			// 	console.log("[SettingTab] Current allowedFolder is invalid/root, defaulting to first available folder.");
+			// 	currentSelectedFolder = vaultFolders[0];
+				// Optionally, immediately save this default if you want to enforce a selection
+				// this.plugin.settings.allowedFolder = currentSelectedFolder;
+				// this.saveCallback(this.plugin.settings);
+		// }
+			
       this.root.render(
           <React.StrictMode>
               <SettingsView
@@ -74,9 +66,8 @@ export class SettingTab extends PluginSettingTab {
 										};
 										await this.saveCallback(settingsWithNewFolder);
 								}}
-                  // Pass the plugin's current, authoritative settings
-                  settings={this.plugin.settings} // *** Now this is valid ***
-                  availableFolders={vaultFolders}
+								settings={this.plugin.settings}
+                availableFolders={vaultFolders}
               />
           </React.StrictMode>
         );

@@ -15,14 +15,10 @@ export class SyncManager {
         this.app = app;
         this.settings = initialSettings;
         this.statusUpdater = statusUpdater;
-        // Set initial status based on whether a folder is selected
         this.setStatus(this.settings.allowedFolder ? "idle" : "disabled");
     }
 
-    /**
-     * Updates the internal status and triggers the status bar update.
-     * Avoids redundant updates if the status hasn't changed.
-     */
+
     private setStatus(newStatus: SyncStatus): void {
         if (this.currentStatus === newStatus) return; // Avoid redundant updates
         this.currentStatus = newStatus;
@@ -30,10 +26,6 @@ export class SyncManager {
         this.statusUpdater.update(this.currentStatus, this.settings.allowedFolder);
     }
 
-    /**
-     * Updates the SyncManager with new plugin settings.
-     * If the allowedFolder changes, it triggers a new sync.
-     */
     public updateSettings(newSettings: Settings): void {
         const oldFolder = this.settings.allowedFolder;
         this.settings = newSettings;

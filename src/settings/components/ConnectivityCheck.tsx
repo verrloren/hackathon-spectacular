@@ -2,8 +2,8 @@ import * as React from "react";
 import {useState} from "react";
 import SettingsItem from "./SettingsItem";
 import {Notice} from "obsidian";
-import AIApiClient from "../../prediction_services/api_clients/AIApiClient";
 import {Settings} from "../versions";
+import AIApiClient from '../../prediction_services/api_clients/AIApiClient';
 
 interface IProps {
     settings: Settings;
@@ -43,14 +43,14 @@ export default function ConnectivityCheck(props: IProps): React.JSX.Element {
             setErrors(_errors);
             if (_errors.length > 0) {
                 new Notice(
-                    `Cannot connect to the ${props.settings.AIApiSettings.url} API. Please check your settings.`
+                    `Cannot connect to the ${props.settings.webSocketUrl} API. Please check your settings.`
                 );
                 setStatus(Status.Failure);
                 return;
             }
 
             new Notice(
-                `Successfully connected to the ${props.settings.AIApiSettings.url} API.`
+                `Successfully connected to the ${props.settings.webSocketUrl} API.`
             );
             setStatus(Status.Success);
         } catch (e) {
