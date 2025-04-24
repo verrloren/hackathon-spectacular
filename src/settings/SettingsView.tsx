@@ -47,6 +47,10 @@ export default function SettingsView(props: IProps): React.JSX.Element {
 					<h1>Spectacular</h1>
 					<p className="setting-item-description">The plugin for analitics autocompletion.</p>
 
+
+
+            <h2 >General</h2>
+
 						<div className="setting-item">
                 <div className="setting-item-info">
                     <div className="setting-item-name">Select Folder</div>
@@ -78,8 +82,7 @@ export default function SettingsView(props: IProps): React.JSX.Element {
                     </select>
                 </div>
             </div>
-
-            <h2 >General</h2>
+						
             <CheckBoxSettingItem
                 name={"Enable"}
                 description={
