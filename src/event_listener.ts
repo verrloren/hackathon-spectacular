@@ -76,6 +76,17 @@ class EventListener implements EventHandler, SettingsObserver {
         this.wsConnectionFactory = new WebSocketConnectionFactory();
     }
 
+		private isFileAllowed(file: TFile | null): boolean {
+			if (!this.settings.allowedFolder) {
+					return true;
+			}
+			if (!file) {
+					return false;
+			}
+			const allowedPathPrefix = this.settings.allowedFolder === "/" ? "/" : this.settings.allowedFolder + "/";
+			return file.path.startsWith(allowedPathPrefix);
+	}
+
     public createSession(): Session {
         this.session = { sid: uuidv4().substring(0, 8) };
         console.log(`[EventListener] Created and stored client-side session: ${this.session.sid}`);
@@ -92,6 +103,13 @@ class EventListener implements EventHandler, SettingsObserver {
     }
 
     private async initializeWebSocket(): Promise<void> {
+			if (!this.isFileAllowed(this.currentFile)) {
+				console.log(`[EventListener] Skipping WebSocket initialization: Current file '${this.currentFile?.path ?? 'none'}' not in allowed folder '${this.settings.allowedFolder}'.`);
+				if (!(this.state instanceof DisabledFileSpecificState)) {
+						this.transitionToDisabledFileSpecificState();
+				}
+				return;
+		}
         if (this.isWsConnecting) {
           console.log("WebSocket initialization already in progress. Awaiting...");
           await (this.wsInitializationPromise ?? Promise.resolve());
@@ -279,11 +297,35 @@ class EventListener implements EventHandler, SettingsObserver {
         this.view = view;
     }
 
-    public handleFileChange(file: TFile): void {
-        this.currentFile = file;
-        this.state.handleFileChange(file);
-    }
+    async handleFileChange(file: TFile): Promise<void> {
+			this.currentFile = file;
+			console.log(`[EventListener] File changed: ${file?.path ?? 'None'}`);
 
+			const isAllowed = this.isFileAllowed(file);
+
+			if (!isAllowed) {
+					if (!(this.state instanceof DisabledFileSpecificState)) {
+							this.transitionToDisabledFileSpecificState();
+							await this.closeWebSocketConnection();
+					}
+			} else if (this.state instanceof DisabledFileSpecificState) {
+					console.log(`[EventListener] File '${file?.path}' is allowed. Re-enabling (if other settings permit).`);
+					if (this.settings.enabled && checkForErrors(this.settings).size === 0) {
+							this.transitionToIdleState();
+							await this.initializeWebSocket();
+					} else if (!this.settings.enabled) {
+							this.transitionToDisabledManualState();
+					} else {
+							this.transitionToDisabledInvalidSettingsState();
+					}
+			} else {
+				if (this.settings.enabled && !this.wsConnection && !this.isWsConnecting) {
+					await this.initializeWebSocket();
+				}
+				await this.state.handleFileChange(file);
+			}
+			this.updateStatusBarText();
+	}
     insertCurrentSuggestion(suggestion: string): void {
         if (this.view === null) {
             return;
@@ -336,9 +378,7 @@ class EventListener implements EventHandler, SettingsObserver {
       addToCache = true
     ): void {
 			console.log("[EventListener] transitionToSuggestingState called. View:", this.view ? 'Exists' : 'NULL');
-        if (this.view === null) {
-            return;
-        }
+        if (this.view === null) return;
         if (suggestion.trim().length === 0) {
             this.transitionToIdleState();
             return;
@@ -471,12 +511,17 @@ class EventListener implements EventHandler, SettingsObserver {
     }
 
     public isDisabled(): boolean {
-        return (
-            this.state instanceof DisabledManualState ||
-            this.state instanceof DisabledInvalidSettingsState ||
-            this.state instanceof DisabledFileSpecificState
-        );
-    }
+			const fileAllowed = this.isFileAllowed(this.currentFile);
+			if (!fileAllowed && !(this.state instanceof DisabledFileSpecificState)) {
+				console.log(`[EventListener] Disabled: Current file '${this.currentFile?.path}' not in allowed folder '${this.settings.allowedFolder}'.`);
+			}
+			return (
+					!fileAllowed || 
+					this.state instanceof DisabledManualState ||
+					this.state instanceof DisabledInvalidSettingsState ||
+					this.state instanceof DisabledFileSpecificState
+			);
+		}
 
     public isIdle(): boolean {
         return this.state instanceof IdleState;

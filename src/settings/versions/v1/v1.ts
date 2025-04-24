@@ -45,7 +45,7 @@ export const settingsSchema = z.object({
 	cacheSuggestions: z.boolean(),
 	debugMode: z.boolean(),
 	wsDebounceMillis: z.number().int().min(0).optional(),
-	availableFolders: z.string().optional()
+	allowedFolder: z.string().optional()
 }).strict();
 // ...existing code...
 
@@ -93,7 +93,7 @@ export const DEFAULT_SETTINGS: Settings = {
     cacheSuggestions: true,
     debugMode: false,
 		wsDebounceMillis: 1000 * 60 * 5,
-		availableFolders: ""
+		allowedFolder: ""
 	};
 
 	export const pluginDataSchema = z.object({

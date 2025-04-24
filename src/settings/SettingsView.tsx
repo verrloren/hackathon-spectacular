@@ -20,27 +20,53 @@ interface IProps {
 export default function SettingsView(props: IProps): React.JSX.Element {
     const [settings, _setSettings] = useState<Settings>(props.settings);
     const errors = checkForErrors(settings);
-		const folderSelectRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
-        _setSettings(props.settings);
-    }, [props.settings]);
+			_setSettings(props.settings);
+	}, [props.settings]);
 
     const updateSettings = (update: Partial<Settings>) => {
-        _setSettings((settings: Settings) => {
-            const newSettings = {...settings, ...update};
+        _setSettings((currentSettings: Settings) => {
+            const newSettings = {...currentSettings, ...update};
             props.onSettingsChanged(newSettings);
             return newSettings;
         });
     };
+
+		const handleFolderChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+			updateSettings({ allowedFolder: event.target.value });
+	};
 
     return (
         <div>
 					<h1>Spectacular</h1>
 					<p className="setting-item-description">The plugin for analitics autocompletion.</p>
 
-						<h2>Select folder</h2>
-						{/* selecting folder from all folders dropdown */}
+						<div className="setting-item">
+                <div className="setting-item-info">
+                    <div className="setting-item-name">Select Folder</div>
+                    <div className="setting-item-description">
+                        Restrict plugin functionality to files within this folder (and its subfolders). Select 'All Folders' to disable restriction.
+                    </div>
+                </div>
+                <div className="setting-item-control">
+                    <select
+                        className="dropdown"
+                        value={settings.allowedFolder || ""}
+                        onChange={handleFolderChange}
+                    >
+                        <option value="">All Folders</option>
+                        {props.availableFolders.map(folderPath => {
+                            const displayPath = folderPath === "/" ? "/" : folderPath;
+                            return (
+                                <option key={folderPath} value={folderPath}>
+                                    {displayPath}
+                                </option>
+                            );
+                        })}
+                    </select>
+                </div>
+            </div>
 
             <h2 >General</h2>
             <CheckBoxSettingItem

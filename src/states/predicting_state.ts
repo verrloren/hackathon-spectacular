@@ -106,7 +106,7 @@ class PredictingState extends State {
 		console.log(`Sending prediction request: ${this.currentRequestId}`);
 		try {
 			const result: WsServerResponse = await connection.send(request);
-			if (!this.isStillNeeded || result.id !== this.currentRequestId) {
+			if (result.id !== this.currentRequestId) {
 					console.log(`Prediction response received but no longer needed or ID mismatch: ${result.id}`);
 					return;
 			}
