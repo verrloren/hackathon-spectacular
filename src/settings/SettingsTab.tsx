@@ -75,7 +75,6 @@ export class SettingTab extends PluginSettingTab {
 
 
     hide(): void {
-        // Process buffered changes for non-folder settings when tab closes
         if (this.updatedSettingsBuffer) {
             const otherUpdates = { ...this.updatedSettingsBuffer };
             delete otherUpdates.allowedFolder;
@@ -91,15 +90,12 @@ export class SettingTab extends PluginSettingTab {
 
             if (otherSettingsChanged) {
                  console.log("[SettingTab] Saving other setting changes on hide.");
-                 // Apply the other changes to the plugin's settings
-                 // *** Now this.plugin.settings is valid ***
                  this.plugin.settings = { ...this.plugin.settings, ...otherUpdates };
 
                  const errors = checkForErrors(this.plugin.settings);
                  if (errors.size > 0) {
                      new Notice("Spectacular: Some settings have errors and might not work correctly.");
                  }
-                 // Save the merged settings using the callback from main.ts
                  this.saveCallback(this.plugin.settings);
             }
             this.updatedSettingsBuffer = undefined;

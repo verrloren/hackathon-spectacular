@@ -173,20 +173,23 @@ export default class SpectacularPlugin extends Plugin {
                                 });
                     });
 
-                        menu.addItem((item) => {
-                            item.setTitle("Disconnect Folder")
-                                .setIcon("unlink")
-                                .onClick(async () => {
-																	const folderToDisconnect = this.settings.allowedFolder;
-																	if (!folderToDisconnect) return; 
-																	new Notice(
-																			`Disconnecting sync folder "${folderToDisconnect}".`
-																	);
-																	this.settings.allowedFolder = undefined;
-																	await this.saveSettings();
-																	this.settingTab.display();
-															});
-                        });
+										menu.addItem((item) => {
+											item.setTitle("Disconnect Folder")
+													.setIcon("unlink")
+													.onClick(async () => {
+															const folderToDisconnect = this.settings.allowedFolder;
+															if (!folderToDisconnect) return;
+															new Notice(
+																	`Disconnecting sync folder "${folderToDisconnect}".`
+															);
+															const settingsWithDisconnect = {
+																	...this.settings,
+																	allowedFolder: undefined 
+															};
+															await this.saveSettings(settingsWithDisconnect);
+															this.settingTab.display();
+													});
+									});
                     }
                 }
             })
