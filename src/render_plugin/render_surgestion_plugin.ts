@@ -8,36 +8,28 @@ import {
 } from "@codemirror/view";
 import {cancelSuggestion, InlineSuggestionState} from "./states";
 import {Prec} from "@codemirror/state";
-import {OptionalSuggestion, Suggestion} from "./types";
+import {OptionalSuggestion} from "./types";
 
 const RenderSuggestionPlugin = () =>
     Prec.lowest(
         ViewPlugin.fromClass(
             class RenderPlugin {
                 decorations: DecorationSet;
-                suggestion: Suggestion;
 
                 constructor(view: EditorView) {
                     this.decorations = Decoration.none;
-                    this.suggestion = {
-                        value: "",
-                        render: false,
-                    }
                 }
 
                 async update(update: ViewUpdate) {
-                    const suggestion: OptionalSuggestion = update.state.field(
-                        InlineSuggestionState
+                    const currentSuggestionState: OptionalSuggestion | undefined = update.state.field(
+                        InlineSuggestionState,
+												false
                     );
-
-                    if (suggestion !== null && suggestion !== undefined) {
-                        this.suggestion = suggestion;
-                    }
 
                     this.decorations = inlineSuggestionDecoration(
-                        update.view,
-                        this.suggestion
-                    );
+											update.view,
+											currentSuggestionState 
+									);
                 }
             },
             {
@@ -48,24 +40,28 @@ const RenderSuggestionPlugin = () =>
 
 function inlineSuggestionDecoration(
     view: EditorView,
-    display_suggestion: Suggestion
+    suggestionState: OptionalSuggestion | undefined
 ) {
+
+    if (suggestionState == null || !suggestionState.render) {
+        console.log("[inlineSuggestionDecoration] State is null/undefined or render=false. Returning Decoration.none."); // Add Log
+        return Decoration.none;
+}
+
     const post = view.state.selection.main.head;
 
-    if (!display_suggestion.render) {
-        return Decoration.none;
-    }
     try {
-        const widget = new InlineSuggestionWidget(display_suggestion.value, view);
-        const decoration = Decoration.widget({
-            widget,
-            side: 1,
-        });
+			const widget = new InlineSuggestionWidget(suggestionState.value, view);
+			const decoration = Decoration.widget({
+					widget,
+					side: 1, 
+			});
 
-        return Decoration.set([decoration.range(post)]);
-    } catch (e) {
-        return Decoration.none;
-    }
+			return Decoration.set([decoration.range(post)]);
+	} catch (e) {
+			console.error("[inlineSuggestionDecoration] Error creating widget:", e);
+			return Decoration.none;
+	}
 
 }
 
@@ -84,15 +80,21 @@ export class InlineSuggestionWidget extends WidgetType {
         const span = document.createElement("span");
         span.textContent = this.display_suggestion;
 				span.classList.add("cm-spectacular-suggestion");
-        span.onclick = () => {
-            cancelSuggestion(this.view);
-        }
-        span.onselect = () => {
-            cancelSuggestion(this.view);
-        }
+        span.onclick = (event) => {
+					event.stopPropagation(); 
+					console.log("[Widget] Clicked, calling cancelSuggestion.");
+					cancelSuggestion(this.view);
+			};
+        // span.onselect = () => {
+        //     cancelSuggestion(this.view);
+        // }
 
         return span;
     }
+
+		ignoreEvent(event: Event): boolean {
+			return event.type === 'mousedown' || event.type === 'click';
+	}
 
     destroy(dom: HTMLElement) {
         super.destroy(dom);

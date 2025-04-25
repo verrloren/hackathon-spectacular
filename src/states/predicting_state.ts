@@ -3,7 +3,7 @@ import { DocumentChanges } from "../render_plugin/document_changes_listener";
 import EventListener from "../event_listener";
 import { v4 as uuidv4 } from "uuid";
 import { Connection, Session, WsPredictRequest, WsServerResponse } from "src/websocket/types";
-import { updateSuggestion } from "src/render_plugin/states";
+import { cancelSuggestion as dispatchCancelSuggestion } from "src/render_plugin/states";
 
 class PredictingState extends State {
     private predictionPromise: Promise<void> | null = null;
@@ -27,22 +27,37 @@ class PredictingState extends State {
 	): PredictingState {
 			const newState = new PredictingState(context, prefix, suffix);
 
-			if (context.view) {
-					console.log("[PredictingState] Displaying loading indicator '...'");
-					updateSuggestion(context.view, "...");
-			} else {
-					console.warn("[PredictingState] Cannot display loading indicator, view is null.");
-			}
+			console.log("[PredictingState] Scheduling loading indicator '...' display.");
+			// @ts-ignore - Accessing private method, consider making dispatchUpdateSuggestion public or adding a public wrapper
+			context.dispatchUpdateSuggestion("...");
 
 			newState.startPredicting();
 			return newState;
 	}
 
 
-    handleCancelKeyPressed(): boolean {
-        this.cancelPrediction();
-        return true;
-    }
+	handleCancelKeyPressed(): boolean {
+		console.log("[PredictingState] handleCancelKeyPressed called."); // Log 1
+
+		// *** Try direct dispatch FIRST ***
+		if (this.context.view) {
+				try {
+					console.log("[PredictingState] Attempting direct dispatchCancelSuggestion..."); // Log 2
+					dispatchCancelSuggestion(this.context.view);
+						console.log("[PredictingState] Direct dispatchCancelSuggestion finished."); // Log 3
+				} catch (e) {
+					console.error("[PredictingState] Error during direct dispatch:", e); // Log 4 (Might see "update in progress" here)
+				}
+		} else {
+				console.warn("[PredictingState] Cannot direct dispatch, view is null."); // Log 5
+		}
+
+		// Then cancel the prediction logic and transition state
+		this.cancelPrediction();
+		return true;
+}
+
+
 
 		
     async handleDocumentChange(
@@ -64,9 +79,9 @@ class PredictingState extends State {
 			this.isStillNeeded = false;
 			const requestIdToCancel = this.currentRequestId;
 			this.currentRequestId = null;
-			console.log(`canceled current request id: ${requestIdToCancel}`);
+			console.log(`[PredictingState] canceled current request id: ${requestIdToCancel}`);
 			this.context.transitionToIdleState();
-	}
+}
 
 
 	startPredicting(): void {

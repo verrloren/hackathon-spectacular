@@ -3,6 +3,7 @@ import {DocumentChanges} from "../render_plugin/document_changes_listener";
 import EventListener from "../event_listener";
 import {Settings} from "../settings/versions";
 import {extractNextWordAndRemaining} from "../utils";
+import { cancelSuggestion as dispatchCancelSuggestion } from "../render_plugin/states";
 
 class SuggestingState extends State {
     private readonly suggestion: string;
@@ -151,10 +152,25 @@ class SuggestingState extends State {
     }
 
     handleCancelKeyPressed(): boolean {
-        this.context.clearSuggestionsCache();
-        this.clearPrediction();
-        return true;
-    }
+			console.log("[SuggestingState] handleCancelKeyPressed called."); // Log 6
+
+			// *** Try direct dispatch FIRST ***
+			if (this.context.view) {
+					try {
+							console.log("[SuggestingState] Attempting direct dispatchCancelSuggestion..."); // Log 7
+							dispatchCancelSuggestion(this.context.view);
+							console.log("[SuggestingState] Direct dispatchCancelSuggestion finished."); // Log 8
+					} catch (e) {
+							console.error("[SuggestingState] Error during direct dispatch:", e); // Log 9 (Might see "update in progress" here)
+					}
+			} else {
+					console.warn("[SuggestingState] Cannot direct dispatch, view is null."); // Log 10
+			}
+
+			this.context.transitionToIdleState();
+			this.context.clearSuggestionsCache(); // Keep cache clear if desired
+			return true;
+	}
 
     handleAcceptCommand() {
         this.accept();

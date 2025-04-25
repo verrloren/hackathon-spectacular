@@ -54,8 +54,8 @@ export const DEFAULT_SETTINGS: Settings = {
     version: "1",
     enabled: true,
     advancedMode: false,
-		// webSocketUrl: "wss://pobeda.loca.lt/ws",
-		webSocketUrl: "ws://it_one_completer:8765/ws",
+		webSocketUrl: "wss://pobeda.loca.lt/ws",
+		// webSocketUrl: "ws://it_one_completer:8765/ws",
     triggers: [
         {type: "string", value: "# "},
         {type: "string", value: ". "},

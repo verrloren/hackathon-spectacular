@@ -46,7 +46,6 @@ class WebSocket implements Connection {
         this._ws = new globalThis.WebSocket(hostUrl);
 
         this._idleTimeoutMillis = idleTimeoutMillis;
-
         this._openHandler = openHandler;
         this._closeHandler = closeHandler;
         this._errorHandler = errorHandler;

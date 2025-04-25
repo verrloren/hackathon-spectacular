@@ -2,10 +2,10 @@
 import StatusBar from "./status_bar";
 import { DocumentChanges, getPrefix, getSuffix } from "./render_plugin/document_changes_listener";
 import {
-    cancelSuggestion,
     clearSuggestionEffect,
     InlineSuggestionState,
-    updateSuggestion,
+    updateSuggestion as dispatchUpdateSuggestion,
+		cancelSuggestion as dispatchCancelSuggestion,
 } from "./render_plugin/states";
 import { EditorView } from "@codemirror/view";
 import State from "./states/state";
@@ -384,12 +384,49 @@ public insertCurrentSuggestion(suggestionText: string): void {
 	})
 }
 
-    cancelSuggestion(): void {
-        if (this.view === null) {
-            return;
-        }
-        cancelSuggestion(this.view);
-    }
+cancelSuggestion(): void {
+	if (this.view) {
+			const view = this.view;
+			setTimeout(() => {
+					console.log("[EventListener] Scheduling cancelSuggestion dispatch.");
+					try {
+							if (view.dom.isConnected) {
+									// *** Now dispatchCancelSuggestion is defined ***
+									dispatchCancelSuggestion(view);
+									console.log("[EventListener] cancelSuggestion dispatched.");
+							} else {
+									console.warn("[EventListener] View was detached before scheduled cancelSuggestion dispatch.");
+							}
+					} catch (e) {
+							console.error("[EventListener] Error during scheduled cancelSuggestion dispatch:", e);
+					}
+			}, 0);
+	} else {
+			console.warn("[EventListener] cancelSuggestion called but view is null.");
+	}
+}
+
+
+private dispatchUpdateSuggestion(suggestion: string): void {
+	if (this.view) {
+			const view = this.view; 
+			setTimeout(() => {
+					console.log("[EventListener] Scheduling updateSuggestion dispatch with:", suggestion);
+						try {
+							if (view.dom.isConnected) {
+								dispatchUpdateSuggestion(view, suggestion);
+								console.log("[EventListener] updateSuggestion dispatched.");
+							} else {
+								console.warn("[EventListener] View was detached before scheduled updateSuggestion dispatch.");
+							}
+					} catch (e) {
+							console.error("[EventListener] Error during scheduled updateSuggestion dispatch:", e);
+					}
+			}, 0);
+	} else {
+			console.warn("[EventListener] dispatchUpdateSuggestion called but view is null.");
+	}
+}
 
     private transitionTo(state: State): void {
         this.state = state;
@@ -441,18 +478,18 @@ public insertCurrentSuggestion(suggestionText: string): void {
             new SuggestingState(this, suggestion, prefix, suffix)
         );
 				console.log("[EventListener] Calling updateSuggestion with:", suggestion);
-        updateSuggestion(this.view, suggestion);
+        dispatchUpdateSuggestion(this.view, suggestion);
     }
 
     public transitionToIdleState() {
-        const previousState = this.state;
+			const previousStateName = this.state?.constructor?.name || 'Unknown';
+			console.log(`[EventListener] Transitioning to IdleState from ${previousStateName}.`);
 
-        this.transitionTo(new IdleState(this));
+			this.transitionTo(new IdleState(this));
 
-        if (previousState instanceof SuggestingState) {
-            this.cancelSuggestion();
-        }
-    }
+			console.log("[EventListener] Scheduling suggestion cancellation due to Idle transition.");
+			this.cancelSuggestion();
+	}
 
     private updateStatusBarText(): void {
         this.statusBar.updateText(this.getStatusBarText());
@@ -537,6 +574,18 @@ public insertCurrentSuggestion(suggestionText: string): void {
 			}
 			return handled;
 	}
+	
+	public handleEditorKeyDown(event: KeyboardEvent): boolean {
+    if (event.key === "Escape") {
+        if (this.handleCancelKeyPressed()) {
+            event.preventDefault();
+            return true;
+        }
+    }
+    // ...other key handling...
+    return false;
+}
+
     handlePartialAcceptKeyPressed(): boolean {
         return this.state.handlePartialAcceptKeyPressed();
     }

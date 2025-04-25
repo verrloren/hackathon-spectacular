@@ -128,6 +128,9 @@ export default class SpectacularPlugin extends Plugin {
             if (view) {
                 // @ts-expect-error, not typed
                 const editorView = view.editor.cm as EditorView;
+								if (editorView) {
+									editorView.dom.addEventListener("keydown", (event) => this.eventListener.handleEditorKeyDown(event));
+							}
                 this.eventListener.onViewUpdate(editorView);
                 this.eventListener.handleFileChange(
                     view.file instanceof TFile ? view.file : null
