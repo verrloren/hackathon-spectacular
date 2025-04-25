@@ -7,8 +7,8 @@ export interface DocsDto {
 	message: string;
 }
 
-// const backendUrl = "http://it_one_completer:8765"
-const backendUrl = "https://pobeda.loca.lt"
+const backendUrl = "http://it_one_completer:8765"
+// const backendUrl = "https://pobeda.loca.lt"
 
 export const docsApi = {
 	sendDocs: async (projectId: string, docIds: string[], files: FileData[]) => {
