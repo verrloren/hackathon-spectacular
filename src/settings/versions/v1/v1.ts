@@ -34,7 +34,7 @@ export const settingsSchema = z.object({
 	version: z.literal("1"),
 	enabled: z.boolean(),
 	advancedMode: z.boolean(),
-	webSocketUrl: z.string().url({ message: "Invalid WebSocket URL (e.g., wss://your-host.com/ws)" }),
+	webSocketUrl: z.string().url({ message: "Invalid WebSocket URL" }),
 	triggers: z.array(triggerSchema),
 	delay: z.number().int().min(MIN_DELAY, {message: "Delay must be between 0ms and 2000ms"}).max(MAX_DELAY, {message: "Delay must be between 0ms and 2000ms"}),
 	userMessageTemplate: z.string().min(3, {message: "User message template must be at least 3 characters long"}),
@@ -54,7 +54,8 @@ export const DEFAULT_SETTINGS: Settings = {
     version: "1",
     enabled: true,
     advancedMode: false,
-		webSocketUrl: "wss://pobeda.loca.lt/ws",
+		// webSocketUrl: "wss://pobeda.loca.lt/ws",
+		webSocketUrl: "ws://localhost:8765/ws",
     triggers: [
         {type: "string", value: "# "},
         {type: "string", value: ". "},

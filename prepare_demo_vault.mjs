@@ -2,11 +2,8 @@ import fs from 'fs';
 import path from 'path';
 
 function main() {
-    /**
-     * This script ensures the plugin artifacts are symlinked into the demo vault.
-     * Such that you can test your build in the demo vault.
-     */
-    const main_js = path.resolve("main.js");
+
+	const main_js = path.resolve("main.js");
     const srcPaths = ["manifest.json", "styles.css", main_js].map((p) => path.resolve(p));
     const outputFolder = "demo_vault/.obsidian/plugins/spectacular";
 

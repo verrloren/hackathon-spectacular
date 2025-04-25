@@ -83,7 +83,7 @@ class EventListener implements EventHandler {
 				ttl: settings.cacheSuggestions ? FIVE_MINUTES_IN_MS : 0, 
 		});
     }
-
+t
 		private isFileAllowed(file: TFile | null): boolean {
 			if (!this.settings.allowedFolder) {
 					return true;

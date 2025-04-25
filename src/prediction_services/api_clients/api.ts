@@ -7,7 +7,7 @@ export interface DocsDto {
 	message: string;
 }
 
-const backendUrl = "https://pobeda.loca.lt";
+const backendUrl = "http://localhost:8765"
 
 export const docsApi = {
 	sendDocs: async (projectId: string, docIds: string[], files: FileData[]) => {
