@@ -22,6 +22,7 @@ class WebSocket implements Connection {
         {
             resolve: (value: WsServerResponse) => void;
             reject: (reason?: any) => void;
+						timerId: ReturnType<typeof setTimeout> | null;
         }
     > = new Map();
 
@@ -80,7 +81,7 @@ class WebSocket implements Connection {
         return this._session;
     }
 
-    async send(req: WsClientRequest): Promise<WsServerResponse> {
+    async send(req: WsClientRequest, timeoutMs = 60000): Promise<WsServerResponse> {
         if (this._ws.readyState !== globalThis.WebSocket.OPEN) {
             return Promise.reject(new Error("WebSocket is not open."));
         }
@@ -90,21 +91,38 @@ class WebSocket implements Connection {
         const messageToSend = { ...req, id };
 
         return new Promise((resolve, reject) => {
-            this._pendingRequests.set(id, { resolve, reject });
-            try {
-                this._ws.send(JSON.stringify(messageToSend));
-								console.log(`WebSocket message sent: ${JSON.stringify(messageToSend)}`);
-            } catch (error) {
-                this._pendingRequests.delete(id);
-                reject(error);
-            }
-            setTimeout(() => {
-                if (this._pendingRequests.has(id)) {
-                    this._pendingRequests.delete(id);
-                    reject(new Error(`Request ${id} timed out`));
-                }
-            }, 30000); // 30sec
-        });
+					let timerId: ReturnType<typeof setTimeout> | null = null;
+
+					const cleanup = () => {
+							if (timerId !== null) {
+									clearTimeout(timerId); 
+							}
+							this._pendingRequests.delete(id); 
+							console.log(`[WebSocket] Cleaned up request ${id}`);
+					};
+
+					timerId = setTimeout(() => {
+							if (this._pendingRequests.has(id)) {
+									console.error(`[WebSocket] Request ${id} timed out after ${timeoutMs}ms.`);
+									reject(new Error(`Request ${id} timed out`));
+							}
+					}, timeoutMs);
+
+					this._pendingRequests.set(id, {
+							resolve: (value) => { cleanup(); resolve(value); },
+							reject: (reason) => { cleanup(); reject(reason); },
+							timerId
+					});
+					console.log(`[WebSocket] Added pending request ${id} with timeout ${timeoutMs}ms`);
+
+					try {
+							this._ws.send(JSON.stringify(messageToSend));
+							console.log(`[WebSocket] Sent request ${id}: ${JSON.stringify(messageToSend)}`);
+					} catch (error) {
+							console.error(`[WebSocket] Error sending request ${id}:`, error);
+							this._pendingRequests.get(id)?.reject(error);
+					}
+			});
     }
 
     close(): void {
@@ -118,8 +136,14 @@ class WebSocket implements Connection {
 
     private onmessage(event: MessageEvent) {
 			this.resetIdleTimer();
+			let data: WsServerResponse | null = null;
 			try {
-					const data = JSON.parse(event.data as string) as WsServerResponse;
+					data = JSON.parse(event.data as string) as WsServerResponse;
+
+					if (!data || !data.id) {
+						console.warn("[WebSocket] Received message without ID:", data);
+						return;
+				}
 
 					if (data.event === 'sessionInfo' && 'session' in data && data.session) {
 						this._session = data.session;
@@ -129,18 +153,27 @@ class WebSocket implements Connection {
 
 					const pending = this._pendingRequests.get(data.id);
 					if (pending) {
-							if (data.errorCode && data.errorCode !== 0) {
+
+						if (pending.timerId !== null) {
+							clearTimeout(pending.timerId);
+					}
+
+							if (data.errorCode && data.errorCode !== 1000 && data.errorCode !== 0) {
+								console.error(`[WebSocket] Request ${data.id} failed with server error:`, data.errorMessage || data.errorCode);
 								pending.reject(new Error(data.errorMessage || `Server error code: ${data.errorCode}`));
 							} else {
 								pending.resolve(data);
 								console.log(`WebSocket message resolved: ${JSON.stringify(data)}`);
 							}
-							this._pendingRequests.delete(data.id);
 					} else {
 						console.log("Received message with no matching pending request:", data);
 					}
 			} catch (error) {
 					console.error("Failed to parse WebSocket message or handle response:", error);
+					if (data && data.id) {
+						const pending = this._pendingRequests.get(data.id);
+						pending?.reject(new Error("Failed to process server response"));
+				}
 			}
 		}
 
@@ -161,7 +194,11 @@ class WebSocket implements Connection {
     }
 
     private rejectPendingRequests(reason: any) {
-			this._pendingRequests.forEach((request) => {
+			console.log(`[WebSocket] Rejecting all (${this._pendingRequests.size}) pending requests. Reason:`, reason);
+			this._pendingRequests.forEach((request, id) => {
+					if (request.timerId !== null) {
+							clearTimeout(request.timerId);
+					}
 					request.reject(reason);
 			});
 			this._pendingRequests.clear();
