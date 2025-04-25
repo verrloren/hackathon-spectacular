@@ -7,92 +7,97 @@ import {
     Transaction,
     TransactionSpec,
 } from "@codemirror/state";
-import {InlineSuggestion, OptionalSuggestion} from "./types";
-import {EditorView} from "@codemirror/view";
+import {InlineSuggestion, OptionalSuggestion, Suggestion} from "./types";
+import {Decoration, EditorView} from "@codemirror/view";
+import { InlineSuggestionWidget } from "./render_surgestion_plugin";
 
 const InlineSuggestionEffect = StateEffect.define<InlineSuggestion>();
+
+export const clearSuggestionEffect = StateEffect.define<null>();
 
 export const InlineSuggestionState = StateField.define<OptionalSuggestion>({
     create(): OptionalSuggestion {
         return null;
     },
     update(
-        value: OptionalSuggestion,
-        transaction: Transaction
-    ): OptionalSuggestion {
-        const inlineSuggestion = transaction.effects.find((effect) =>
-            effect.is(InlineSuggestionEffect)
-        );
-
-        if (inlineSuggestion) {
-					console.log("[InlineSuggestionState] Received effect:", inlineSuggestion.value);
-					if (inlineSuggestion.value?.suggestion) {
-							console.log("[InlineSuggestionState] Updating state to:", inlineSuggestion.value.suggestion);
-							return inlineSuggestion.value.suggestion;
-					} else {
-							console.log("[InlineSuggestionState] Effect received, but no suggestion found. Returning null.");
+			value: OptionalSuggestion, 
+			transaction: Transaction
+	): OptionalSuggestion {
+			// Check for the clear effect first
+			for (const effect of transaction.effects) {
+					if (effect.is(clearSuggestionEffect)) {
+							console.log("[InlineSuggestionState] Clear effect received. Clearing state.");
 							return null; 
 					}
 			}
-        return null;
-    },
+
+			const updateEffect = transaction.effects.find((effect) =>
+					effect.is(InlineSuggestionEffect)
+			);
+
+			if (updateEffect) {
+					console.log("[InlineSuggestionState] Update effect received:", updateEffect.value);
+					return updateEffect.value.suggestion;
+			}
+
+			if (transaction.docChanged && value !== null) {
+					console.log("[InlineSuggestionState] Document changed. Clearing state.");
+					return null; 
+			}
+
+			return value;
+	},
+	provide: (field) =>
+		EditorView.decorations.from(field, (value: OptionalSuggestion) => {
+				if (value && value.render) { 
+						const currentPos = editorViewRef?.state.selection.main.head;
+						if (currentPos !== undefined && editorViewRef) {
+								const widget = new InlineSuggestionWidget(value.value, editorViewRef); // Pass view
+								return Decoration.set([
+										Decoration.widget({
+												widget,
+												side: 1,
+										}).range(currentPos), 
+								]);
+						}
+				}
+				return Decoration.none;
+		}),
 });
 
-// export const updateSuggestion = (
-//     view: EditorView,
-//     suggestion: string
-// ) => {
-//     const doc = view.state.doc;
-//     sleep(1).then(() => {
-//         view.dispatch({
-//             effects: InlineSuggestionEffect.of({
-//                 suggestion: {
-//                     value: suggestion,
-//                     render: true,
-//                 },
-//                 doc: doc,
-//             }),
-//         });
-//     });
-// };
+
+let editorViewRef: EditorView | null = null;
+export function setEditorViewRefForSuggestions(view: EditorView) {
+    editorViewRef = view;
+}
+
 
 export const updateSuggestion = (
 	view: EditorView,
-	suggestion: string
+	suggestionValue: string 
 ) => {
-	if (!view) { 
+	if (!view) {
 			console.warn("updateSuggestion called with null view");
 			return;
 	}
-	const doc = view.state.doc;
+	const suggestion: Suggestion = { value: suggestionValue, render: true };
 	view.dispatch({
 			effects: InlineSuggestionEffect.of({
-					suggestion: {
-							value: suggestion,
-							render: true,
-					},
-					doc: doc, 
+					suggestion: suggestion, 
+					doc: view.state.doc, 
 			}),
 	});
 };
 
 export const cancelSuggestion = (view: EditorView) => {
-	if (!view) { 
+	if (!view) {
 			console.warn("cancelSuggestion called with null view");
 			return;
 	}
-	const doc = view.state.doc;
 	view.dispatch({
-			effects: InlineSuggestionEffect.of({
-					suggestion: {
-							value: "",
-							render: false,
-					},
-					doc: doc, // Pass the document state at the time of dispatch
-			}),
+			effects: clearSuggestionEffect.of(null)
 	});
 };
-
 // export const cancelSuggestion = (view: EditorView) => {
 //     const doc = view.state.doc;
 //     sleep(1).then(() => {

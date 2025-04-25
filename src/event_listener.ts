@@ -3,7 +3,8 @@ import StatusBar from "./status_bar";
 import { DocumentChanges, getPrefix, getSuffix } from "./render_plugin/document_changes_listener";
 import {
     cancelSuggestion,
-    insertSuggestion,
+    clearSuggestionEffect,
+    InlineSuggestionState,
     updateSuggestion,
 } from "./render_plugin/states";
 import { EditorView } from "@codemirror/view";
@@ -21,11 +22,12 @@ import { LRUCache } from "lru-cache";
 import DisabledInvalidSettingsState from "./states/disabled_invalid_settings_state";
 import QueuedState from "./states/queued_state";
 import PredictingState from "./states/predicting_state";
-import { App, TFile } from "obsidian";
+import { App, MarkdownView, TFile } from "obsidian";
 import { Connection, ConnectionFactory, Session } from "./websocket/types";
 import WebSocketConnectionFactory from "./websocket/factory";
 import { v4 as uuidv4 } from "uuid";
 import { SyncManager } from "./sync/SyncManager";
+import { EditorSelection } from '@codemirror/state';
 
 const FIVE_MINUTES_IN_MS = 1000 * 60 * 5;
 const MAX_N_ITEMS_IN_CACHE = 5000;
@@ -341,12 +343,46 @@ class EventListener implements EventHandler {
 		this.suggestionCache.clear();
 }
 
-    insertCurrentSuggestion(suggestion: string): void {
-        if (this.view === null) {
-            return;
-        }
-        insertSuggestion(this.view, suggestion);
-    }
+public insertCurrentSuggestion(suggestionText: string): void {
+	// @ts-expect-error 3123123
+	const view = this.app.workspace.getActiveViewOfType(MarkdownView)?.editor.cm;
+	if (!view) {
+			console.error("insertCurrentSuggestion: Could not get active CodeMirror view.");
+			return;
+	}
+
+	const suggestionField = view.state.field(InlineSuggestionState, false);
+	if (!suggestionField) {
+		console.error("insertCurrentSuggestion: Could not get suggestion state field.");
+		return;
+	}
+
+
+	const currentPos = view.state.selection.main.head;
+	const currentLine = view.state.doc.lineAt(currentPos);
+	const currentLineIndent = currentLine.text.match(/^\s*/)?.[0] || ""; 
+
+	const replaceFrom = suggestionField.suggestionPos ?? currentPos;
+	const replaceTo = currentPos;
+
+
+	const suggestionLines = suggestionText.split('\n');
+	const firstLine = suggestionLines[0];
+	const subsequentLines = suggestionLines.slice(1);
+
+	let textToInsert = firstLine;
+	if (subsequentLines.length > 0) {
+			textToInsert += '\n' + subsequentLines.map(line => currentLineIndent + line.trimStart()).join('\n');
+	}
+
+	console.log(`[EventListener] Inserting suggestion. Indent: "${currentLineIndent}", Text:\n${textToInsert}`);
+
+	view.dispatch({
+			changes: { from: replaceFrom, to: replaceTo, insert: textToInsert },
+			selection: EditorSelection.cursor(replaceFrom + textToInsert.length),
+			effects: clearSuggestionEffect?.of(null)
+	})
+}
 
     cancelSuggestion(): void {
         if (this.view === null) {

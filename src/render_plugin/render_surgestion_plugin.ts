@@ -69,7 +69,7 @@ function inlineSuggestionDecoration(
 
 }
 
-class InlineSuggestionWidget extends WidgetType {
+export class InlineSuggestionWidget extends WidgetType {
     constructor(readonly display_suggestion: string, readonly view: EditorView) {
         super();
         this.display_suggestion = display_suggestion;
