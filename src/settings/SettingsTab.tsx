@@ -35,19 +35,6 @@ export class SettingTab extends PluginSettingTab {
 				.map(folder => folder.path)
 				.sort();
 
-      // if (vaultFolders.length === 0) {
-			// 	console.warn("Spectacular: No valid non-root folders found in the vault.");
-			// }
-
-			// let currentSelectedFolder = this.plugin.settings.allowedFolder;
-			// if ((!currentSelectedFolder || currentSelectedFolder === "/") && vaultFolders.length > 0) {
-			// 	console.log("[SettingTab] Current allowedFolder is invalid/root, defaulting to first available folder.");
-			// 	currentSelectedFolder = vaultFolders[0];
-				// Optionally, immediately save this default if you want to enforce a selection
-				// this.plugin.settings.allowedFolder = currentSelectedFolder;
-				// this.saveCallback(this.plugin.settings);
-		// }
-			
       this.root.render(
           <React.StrictMode>
               <SettingsView

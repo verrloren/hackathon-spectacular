@@ -7,7 +7,7 @@ export interface DocsDto {
 	message: string;
 }
 
-const backendUrl = "http://localhost:8765"
+const backendUrl = "http://it_one_completer:8765"
 
 export const docsApi = {
 	sendDocs: async (projectId: string, docIds: string[], files: FileData[]) => {

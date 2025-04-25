@@ -309,10 +309,10 @@ export default class SpectacularPlugin extends Plugin {
         });
 
         // --- Initial Sync Trigger on Load ---
-        if (this.settings.allowedFolder) {
-            console.log("[main] Triggering initial sync on load.");
-            setTimeout(() => this.syncManager.triggerSync(), 1500);
-        }
+        // if (this.settings.allowedFolder) {
+        //     console.log("[main] Triggering initial sync on load.");
+        //     setTimeout(() => this.syncManager.triggerSync(), 1500);
+        // }
 
         console.log("Spectacular plugin loaded.");
     }
